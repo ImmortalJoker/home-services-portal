@@ -4,4 +4,8 @@ coverage/
 .env
 .env.*
 !.env.example
+deploy/authentik/.env
+deploy/authentik/data/
+deploy/authentik/certs/
+deploy/authentik/custom-templates/
 .DS_Store

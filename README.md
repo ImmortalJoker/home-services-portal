@@ -40,6 +40,10 @@ Only add services and URLs appropriate for your own network. Do not commit crede
 
 This initial version is a static, configurable portal. It does not implement accounts, per-user access control, Google sign-in, health checks, reverse proxying, VPN setup, or router configuration. Remote access and authorization integrations are future work and must protect direct service routes—not merely hide dashboard cards.
 
+## Optional identity-provider test environment
+
+A local-only authentik Compose scaffold is in [`deploy/authentik`](deploy/authentik/README.md). It binds to loopback only and does not yet connect to Google, Tailscale, or any service. Do not expose it until the first admin account is secured and Tailscale access policy is reviewed.
+
 ## Tests
 
 `npm test` runs configuration validation and rendered UI tests. GitHub Actions runs tests and a production build on pushes and pull requests.
