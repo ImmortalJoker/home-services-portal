@@ -34,7 +34,7 @@ Edit `public/services.json`. Each service needs a unique `id`, `name`, and absol
 }
 ```
 
-Only add services and URLs appropriate for your own network. Do not commit credentials, private addresses, or personal service configuration to a public fork.
+Only add services and URLs appropriate for your own network. Do not commit credentials, private addresses, or personal service configuration to a public fork. The live demo includes a **Customize services** editor: edits are stored in that browser only. Export the JSON to preserve or transfer configuration; use Reset to return to the sample list.
 
 ## Scope
 
