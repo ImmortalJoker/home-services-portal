@@ -1,0 +1,26 @@
+{
+  "portalName": "Home Services Portal",
+  "services": [
+    {
+      "id": "media-library",
+      "name": "Media Library",
+      "description": "Browse and stream your media collection.",
+      "url": "http://media.local:8096",
+      "category": "Entertainment"
+    },
+    {
+      "id": "books",
+      "name": "Book Catalog",
+      "description": "Browse the shared book collection.",
+      "url": "http://books.local:8080",
+      "category": "Reading"
+    },
+    {
+      "id": "knowledge",
+      "name": "Offline Knowledge",
+      "description": "Explore your offline reference library.",
+      "url": "http://knowledge.local:8080",
+      "category": "Learning"
+    }
+  ]
+}
