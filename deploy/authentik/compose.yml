@@ -16,6 +16,23 @@ services:
     volumes:
       - database:/var/lib/postgresql/data
 
+  portal-test:
+    image: python:3.13-alpine
+    restart: unless-stopped
+    user: "65534:65534"
+    read_only: true
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    expose:
+      - "8080"
+    volumes:
+      - ./portal-test:/srv:ro
+    command: ["python", "-m", "http.server", "8080", "--bind", "0.0.0.0", "--directory", "/srv"]
+
   server:
     image: ghcr.io/goauthentik/server:2026.8.5
     command: server
@@ -51,6 +68,7 @@ services:
       AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
       AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?Set AUTHENTIK_SECRET_KEY in .env}
+      PORTAL_TEST_EXTERNAL_HOST: ${PORTAL_TEST_EXTERNAL_HOST:-}
     shm_size: 512mb
     volumes:
       - ./data:/data

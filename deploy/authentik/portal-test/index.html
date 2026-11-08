@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protected Test Service</title>
+    <style>
+      :root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1220; color: #e5edf8; }
+      main { max-width: 38rem; margin: 2rem; padding: 2rem; border: 1px solid #334155; border-radius: 1rem; background: #111c2f; }
+      h1 { margin-top: 0; }
+      .badge { display: inline-block; padding: .2rem .55rem; border-radius: 99px; background: #164e63; color: #cffafe; font-size: .8rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="badge">TEST-ONLY</span>
+      <h1>Protected Test Service</h1>
+      <p>This dummy page is served only inside the Docker network and is routed through the Authentik test proxy.</p>
+      <p>Use it to verify login and group authorization before protecting any real household service.</p>
+    </main>
+  </body>
+</html>

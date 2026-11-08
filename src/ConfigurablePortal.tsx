@@ -6,13 +6,50 @@ import { Portal } from './Portal';
 const STORAGE_KEY = 'home-services-portal-config';
 
 function readConfig(fallback: PortalConfig): PortalConfig {
+  let storage: Storage;
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? validateConfig(JSON.parse(stored)) : fallback;
+    storage = window.localStorage;
   } catch {
-    localStorage.removeItem(STORAGE_KEY);
     return fallback;
   }
+
+  let stored: string | null;
+  try {
+    stored = storage.getItem(STORAGE_KEY);
+  } catch {
+    return fallback;
+  }
+  if (!stored) return fallback;
+
+  try {
+    return validateConfig(JSON.parse(stored));
+  } catch {
+    try {
+      storage.removeItem(STORAGE_KEY);
+    } catch {
+      // Storage may be unavailable or read-only; the fallback is still usable.
+    }
+    return fallback;
+  }
+}
+
+function createServiceId(services: ServiceItem[]): string {
+  const existingIds = new Set(services.map((service) => service.id));
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      const id = crypto.randomUUID();
+      if (!existingIds.has(id)) return id;
+    }
+  } catch {
+    // randomUUID is unavailable on some browsers or non-secure origins.
+  }
+
+  let attempt = 0;
+  let id: string;
+  do {
+    id = `service-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${attempt++}`;
+  } while (existingIds.has(id));
+  return id;
 }
 
 export function ConfigurablePortal({ initialConfig }: { initialConfig: PortalConfig }) {
@@ -20,25 +57,32 @@ export function ConfigurablePortal({ initialConfig }: { initialConfig: PortalCon
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
 
-  function save(next: PortalConfig) {
+  function save(next: PortalConfig): boolean {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      setError('Changes could not be saved in this browser. Check storage space or permissions.');
+      return false;
+    }
     setConfig(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setError('');
+    return true;
   }
 
   function addService(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const item: ServiceItem = {
-      id: crypto.randomUUID(),
-      name: String(data.get('name') ?? '').trim(),
-      url: String(data.get('url') ?? '').trim(),
-      description: String(data.get('description') ?? '').trim(),
-      category: String(data.get('category') ?? '').trim(),
-    };
+    const form = event.currentTarget;
+    const data = new FormData(form);
     try {
-      save(validateConfig({ ...config, services: [...config.services, item] }));
-      event.currentTarget.reset();
+      const item: ServiceItem = {
+        id: createServiceId(config.services),
+        name: String(data.get('name') ?? '').trim(),
+        url: String(data.get('url') ?? '').trim(),
+        description: String(data.get('description') ?? '').trim(),
+        category: String(data.get('category') ?? '').trim(),
+      };
+      const next = validateConfig({ ...config, services: [...config.services, item] });
+      if (save(next)) form.reset();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not add service.');
     }
@@ -49,7 +93,12 @@ export function ConfigurablePortal({ initialConfig }: { initialConfig: PortalCon
   }
 
   function reset() {
-    localStorage.removeItem(STORAGE_KEY);
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      setError('Could not reset because browser storage is unavailable.');
+      return;
+    }
     setConfig(initialConfig);
     setError('');
   }

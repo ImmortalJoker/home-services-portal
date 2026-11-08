@@ -35,25 +35,34 @@ Remove the test identity-provider data only when you deliberately want to erase 
 docker compose down --volumes
 ```
 
-## Access group bootstrap
+## Access groups and protected test service
 
-A version-controlled Authentik blueprint at `blueprints/portal-access-groups.yaml` seeds three non-superuser groups: `Portal - Public`, `Portal - Family`, and `Portal - Owner`. Compose mounts that file read-only into the worker. The groups do not contain users and are not bound to any application; this is only a safe starting point for later authorization setup. Do not treat membership or hidden application tiles as service protection.
+A version-controlled Authentik blueprint at `blueprints/portal-access-groups.yaml` seeds three non-superuser groups: `Portal - Public`, `Portal - Family`, and `Portal - Owner`. Compose mounts it read-only into the worker. The groups do not contain users.
 
-To apply or reapply the blueprint after editing it, restart the worker:
+Compose also runs a dummy HTTP page in a non-root, read-only container with no host-published port. It is reachable only from the Docker network. If `PORTAL_TEST_EXTERNAL_HOST` is empty, Authentik creates the groups only and skips the test application/provider. To enable the test app, set that variable in the ignored `deploy/authentik/.env` to a client-reachable HTTPS URL, for example `https://<your-tailnet-hostname>:8443`, and configure Tailscale Serve to proxy that HTTPS port to `http://127.0.0.1:9000`. The blueprint creates a proxy provider and application bound to `Portal - Owner`, then assigns the provider to Authentik's embedded proxy outpost. This Compose project is intended as an isolated Authentik test instance: that assignment sets the embedded outpost's provider list to the demo provider. Do not apply this blueprint to an Authentik instance hosting other applications unless you preserve and include its existing provider assignments.
+
+For the tailnet test route, first inspect existing Serve configuration and confirm the chosen port is unused. A typical command is:
+
+```sh
+tailscale serve --bg --https=8443 http://127.0.0.1:9000
+tailscale serve status
+```
+
+Then recreate the worker so it receives the updated `.env` value and reapplies the blueprint:
 
 ```sh
 docker compose up -d --force-recreate worker
 docker compose logs --tail=100 worker
 ```
 
-The worker should report applying the blueprint. Check the groups in the Authentik admin UI under **Directory → Groups**. Review any blueprint changes before applying them; changing this file can update the corresponding Authentik objects.
+Check **Directory → Groups** and **Applications** in Authentik. Create a separate non-admin test user and deliberately add it to the intended group before testing access; superusers are not a valid test of group authorization. The test application and empty groups do not protect any real household service. Review blueprint changes before applying them; they can update the corresponding Authentik objects.
 
 ## Not configured yet
 
 - Google OAuth source/client credentials and sign-in flow
-- Application providers/bindings and protected service routes
 - Invitation/approval enrollment and owner notifications
-- Any user membership in the seeded groups
+- User membership or grants for real household services
+- Reverse-proxy protection of existing services and direct-port bypass closure
 
 When exposing through Tailscale Serve, inspect the tailnet access policy and Serve status first; keep the service tailnet-only. Google redirect URI will be `https://<chosen-authentik-hostname>/source/oauth/callback/google/` when the authentik source slug is `google`; register the exact final hostname in Google Cloud. Keep the client secret in authentik's source configuration, not this repository or chat.
 

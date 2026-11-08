@@ -4,8 +4,6 @@ on:
   pull_request:
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
   group: pages-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -28,6 +26,9 @@ jobs:
         with:
           path: dist
   deploy:
+    permissions:
+      pages: write
+      id-token: write
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: verify
     environment:
