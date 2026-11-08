@@ -26,6 +26,11 @@ describe('local identity-provider scaffold', () => {
     expect(setup).toContain('openssl rand');
   });
 
+  it('seeds an empty optional external URL instead of publishing a guessed host', () => {
+    expect(setup).toContain('PORTAL_TEST_EXTERNAL_HOST=\\n');
+    expect(readFileSync(resolve(process.cwd(), 'deploy/authentik/.env.example'), 'utf8')).toContain('PORTAL_TEST_EXTERNAL_HOST=');
+  });
+
   it('ignores the local environment file and persistent data', () => {
     expect(gitignore).toContain('deploy/authentik/.env');
     expect(gitignore).toContain('deploy/authentik/data/');

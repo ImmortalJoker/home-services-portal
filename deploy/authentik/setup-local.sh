@@ -9,7 +9,7 @@ fi
 umask 077
 pg_pass=$(openssl rand -base64 36 | tr -d '\n')
 secret_key=$(openssl rand -base64 60 | tr -d '\n')
-printf 'PG_PASS=%s\nAUTHENTIK_SECRET_KEY=%s\n' "$pg_pass" "$secret_key" > .env
+printf 'PG_PASS=%s\nAUTHENTIK_SECRET_KEY=%s\nPORTAL_TEST_EXTERNAL_HOST=\n' "$pg_pass" "$secret_key" > .env
 unset pg_pass secret_key
 printf '%s\n' 'Created deploy/authentik/.env with random secrets (file mode 600).'
 printf '%s\n' 'The file is ignored by Git. Do not share or commit it.'
