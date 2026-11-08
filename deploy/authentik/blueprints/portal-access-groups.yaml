@@ -1,0 +1,21 @@
+version: 1
+metadata:
+  name: Home Services Portal access groups
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+entries:
+  - model: authentik_core.group
+    identifiers:
+      name: Portal - Public
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: Portal - Family
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: Portal - Owner
+    attrs:
+      is_superuser: false

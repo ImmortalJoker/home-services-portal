@@ -56,6 +56,7 @@ services:
       - ./data:/data
       - ./certs:/certs
       - ./custom-templates:/templates
+      - ./blueprints/portal-access-groups.yaml:/blueprints/portal-access-groups.yaml:ro
 
 volumes:
   database:
