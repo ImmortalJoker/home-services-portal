@@ -1,6 +1,6 @@
 # Local authentik test instance
 
-This Compose project starts an isolated authentik identity provider for development. The web port is bound to `127.0.0.1:9000` only. It is **not** published on the LAN or tailnet, and no existing service is placed behind it. This is intentional until Google OAuth and tailnet access are configured and tested.
+This Compose project starts an isolated authentik identity provider for development. The web port is bound to `127.0.0.1:9000` only; Compose does not publish it on the LAN or tailnet, and no existing service is placed behind it. A separate Tailscale Serve configuration may expose it privately on a specific machine; review that machine's Serve status and tailnet policy independently. This scaffold is not an authorization boundary until an application/provider is configured and direct service routes are protected.
 
 ## Start
 
@@ -35,14 +35,26 @@ Remove the test identity-provider data only when you deliberately want to erase 
 docker compose down --volumes
 ```
 
+## Access group bootstrap
+
+A version-controlled Authentik blueprint at `blueprints/portal-access-groups.yaml` seeds three non-superuser groups: `Portal - Public`, `Portal - Family`, and `Portal - Owner`. Compose mounts that file read-only into the worker. The groups do not contain users and are not bound to any application; this is only a safe starting point for later authorization setup. Do not treat membership or hidden application tiles as service protection.
+
+To apply or reapply the blueprint after editing it, restart the worker:
+
+```sh
+docker compose up -d --force-recreate worker
+docker compose logs --tail=100 worker
+```
+
+The worker should report applying the blueprint. Check the groups in the Authentik admin UI under **Directory → Groups**. Review any blueprint changes before applying them; changing this file can update the corresponding Authentik objects.
+
 ## Not configured yet
 
-- Google OAuth source/client credentials
-- Public/Tailscale HTTPS URL and callback registration
-- Tailscale access policy or Serve publishing
-- Email/webhook notification transport
-- Groups, applications, or protected service routes
+- Google OAuth source/client credentials and sign-in flow
+- Application providers/bindings and protected service routes
+- Invitation/approval enrollment and owner notifications
+- Any user membership in the seeded groups
 
-Do not publish port 9000 or bind it to `0.0.0.0`. Before adding Tailscale Serve, inspect access policy and make the portal tailnet-only. Google redirect URI will be `https://<chosen-authentik-hostname>/source/oauth/callback/google/` when the authentik source slug is `google`; register the exact final hostname in Google Cloud. Keep the client secret in authentik's source configuration, not this repository or chat.
+When exposing through Tailscale Serve, inspect the tailnet access policy and Serve status first; keep the service tailnet-only. Google redirect URI will be `https://<chosen-authentik-hostname>/source/oauth/callback/google/` when the authentik source slug is `google`; register the exact final hostname in Google Cloud. Keep the client secret in authentik's source configuration, not this repository or chat.
 
 The upstream authentik Docker Compose installation guidance requires at least 2 CPU cores and 2 GB RAM. The test deployment pins the image version in `compose.yml`; update it deliberately, back up the database, and consult authentik's upgrade instructions before upgrading.
