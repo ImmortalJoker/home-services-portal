@@ -1,0 +1,29 @@
+{
+  "portalName": "Home Services Portal — Access Demo",
+  "services": [
+    {
+      "id": "shared-access-check",
+      "name": "Shared access check",
+      "description": "A harmless endpoint for testing sign-in and shared-service access.",
+      "category": "Access demo",
+      "url": "/sample",
+      "accessGroups": ["Portal - Public"]
+    },
+    {
+      "id": "family-access-check",
+      "name": "Family access check",
+      "description": "A harmless endpoint intended for Family and Owner accounts.",
+      "category": "Access demo",
+      "url": "/family-check",
+      "accessGroups": ["Portal - Family"]
+    },
+    {
+      "id": "owner-access-check",
+      "name": "Owner access check",
+      "description": "A harmless endpoint intended only for Owner accounts.",
+      "category": "Access demo",
+      "url": "/owner-check",
+      "accessGroups": ["Portal - Owner"]
+    }
+  ]
+}

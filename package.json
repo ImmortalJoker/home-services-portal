@@ -8,7 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:authentik-compose": "node scripts/verify-authentik-compose.mjs",
+    "test:portal-server": "node --test tests/portal-server.test.mjs",
+    "test:authentik-runtime": "node scripts/verify-authentik-runtime.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -25,6 +28,7 @@
     "jsdom": "latest",
     "typescript": "latest",
     "vite": "latest",
-    "vitest": "latest"
+    "vitest": "latest",
+    "yaml": "^2.9.1"
   }
 }

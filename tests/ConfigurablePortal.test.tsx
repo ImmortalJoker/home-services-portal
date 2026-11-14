@@ -80,6 +80,61 @@ describe('ConfigurablePortal', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/could not reset/i);
   });
 
+  it('uses the starter config when localStorage.getItem throws', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('Storage denied'); });
+    render(<ConfigurablePortal initialConfig={initial} />);
+    expect(screen.getByRole('heading', { name: 'Demo' })).toBeTruthy();
+  });
+
+  it('uses the starter config when corrupt storage cannot be removed', () => {
+    localStorage.setItem('home-services-portal-config', '{invalid json');
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('Storage is read-only'); });
+    render(<ConfigurablePortal initialConfig={initial} />);
+    expect(screen.getByRole('heading', { name: 'Demo' })).toBeTruthy();
+  });
+
+  it('falls back to a generated ID when crypto.randomUUID throws', () => {
+    vi.stubGlobal('crypto', { randomUUID: () => { throw new Error('Secure context required'); } });
+    try {
+      render(<ConfigurablePortal initialConfig={initial} />);
+      fireEvent.click(screen.getByRole('button', { name: /customize/i }));
+      fireEvent.change(screen.getByLabelText('Service name'), { target: { value: 'Books' } });
+      fireEvent.change(screen.getByLabelText('Service URL'), { target: { value: 'http://books.local' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
+      expect(screen.getByRole('link', { name: /Books/ })).toBeTruthy();
+      expect(screen.queryByRole('alert')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('avoids existing IDs when randomUUID and the fallback both collide', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1234);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const fallbackCollision = `service-${(1234).toString(36)}-${(0.5).toString(36).slice(2)}-0`;
+    const withExisting: PortalConfig = {
+      portalName: 'Demo',
+      services: [
+        { id: 'uuid-collision', name: 'Existing UUID', url: 'http://uuid.local' },
+        { id: fallbackCollision, name: 'Existing fallback', url: 'http://fallback.local' },
+      ],
+    };
+    vi.stubGlobal('crypto', { randomUUID: () => 'uuid-collision' });
+    try {
+      render(<ConfigurablePortal initialConfig={withExisting} />);
+      fireEvent.click(screen.getByRole('button', { name: /customize/i }));
+      fireEvent.change(screen.getByLabelText('Service name'), { target: { value: 'Books' } });
+      fireEvent.change(screen.getByLabelText('Service URL'), { target: { value: 'http://books.local' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
+      const ids = JSON.parse(localStorage.getItem('home-services-portal-config')!).services.map((service: { id: string }) => service.id);
+      expect(new Set(ids).size).toBe(3);
+      expect(ids[2]).not.toBe('uuid-collision');
+      expect(ids[2]).not.toBe(fallbackCollision);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('adds a service when crypto.randomUUID is unavailable', () => {
     vi.stubGlobal('crypto', {});
     try {

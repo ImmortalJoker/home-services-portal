@@ -2,7 +2,6 @@ services:
   postgresql:
     image: docker.io/library/postgres:16-alpine
     restart: unless-stopped
-    env_file: .env
     environment:
       POSTGRES_DB: ${PG_DB:-authentik}
       POSTGRES_PASSWORD: ${PG_PASS:?Set PG_PASS in .env}
@@ -17,12 +16,19 @@ services:
       - database:/var/lib/postgresql/data
 
   portal-test:
-    image: python:3.13-alpine
+    build:
+      context: ../..
+      dockerfile: deploy/authentik/portal/Dockerfile
     restart: unless-stopped
-    user: "65534:65534"
+    user: "1000:1000"
     read_only: true
     environment:
-      PYTHONDONTWRITEBYTECODE: "1"
+      NODE_ENV: production
+      PORTAL_CONFIG_PATH: /app/config/portal-services.json
+      PORTAL_DIST_DIR: /app/dist
+      PORTAL_STATUS_UPSTREAM_URL: ${PORTAL_STATUS_UPSTREAM_URL:-}
+      PORTAL_STATUS_EXTERNAL_URL: ${PORTAL_METRICS_EXTERNAL_HOST:-}
+      PORT: "8080"
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -30,8 +36,13 @@ services:
     expose:
       - "8080"
     volumes:
-      - ./portal-test:/srv:ro
-    command: ["python", "-m", "http.server", "8080", "--bind", "0.0.0.0", "--directory", "/srv"]
+      - ${PORTAL_CONFIG_FILE:-./portal-services.json.example}:/app/config/portal-services.json:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   server:
     image: ghcr.io/goauthentik/server:2026.8.5
@@ -40,7 +51,6 @@ services:
     depends_on:
       postgresql:
         condition: service_healthy
-    env_file: .env
     environment:
       AUTHENTIK_POSTGRESQL__HOST: postgresql
       AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
@@ -61,7 +71,6 @@ services:
     depends_on:
       postgresql:
         condition: service_healthy
-    env_file: .env
     environment:
       AUTHENTIK_POSTGRESQL__HOST: postgresql
       AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
@@ -69,6 +78,9 @@ services:
       AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?Set AUTHENTIK_SECRET_KEY in .env}
       PORTAL_TEST_EXTERNAL_HOST: ${PORTAL_TEST_EXTERNAL_HOST:-}
+      PORTAL_BOOKS_EXTERNAL_HOST: ${PORTAL_BOOKS_EXTERNAL_HOST:-}
+      PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST: ${PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST:-}
+      PORTAL_METRICS_EXTERNAL_HOST: ${PORTAL_METRICS_EXTERNAL_HOST:-}
     shm_size: 512mb
     volumes:
       - ./data:/data

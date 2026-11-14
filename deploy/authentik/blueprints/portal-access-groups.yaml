@@ -4,21 +4,267 @@ metadata:
   labels:
     blueprints.goauthentik.io/instantiate: "true"
 entries:
+  - model: authentik_rbac.role
+    id: portal-access-manager-role
+    identifiers:
+      name: Portal Access Managers
+    attrs:
+      permissions:
+        - authentik_rbac.access_admin_interface
+        - authentik_core.view_user
   - model: authentik_core.group
     identifiers:
       name: Portal - Public
     attrs:
       is_superuser: false
+    permissions:
+      - permission: authentik_core.view_group
+        role: !KeyOf portal-access-manager-role
+      - permission: authentik_core.add_user_to_group
+        role: !KeyOf portal-access-manager-role
+      - permission: authentik_core.remove_user_from_group
+        role: !KeyOf portal-access-manager-role
   - model: authentik_core.group
     identifiers:
       name: Portal - Family
     attrs:
       is_superuser: false
+    permissions:
+      - permission: authentik_core.view_group
+        role: !KeyOf portal-access-manager-role
+      - permission: authentik_core.add_user_to_group
+        role: !KeyOf portal-access-manager-role
+      - permission: authentik_core.remove_user_from_group
+        role: !KeyOf portal-access-manager-role
   - model: authentik_core.group
     identifiers:
       name: Portal - Owner
     attrs:
       is_superuser: false
+      roles:
+        - !KeyOf portal-access-manager-role
+  - model: authentik_core.group
+    identifiers:
+      name: Portal - Pending
+    attrs:
+      is_superuser: false
+    permissions:
+      - permission: authentik_core.view_group
+        role: !KeyOf portal-access-manager-role
+  - model: authentik_flows.flow
+    id: portal-invitation-flow
+    identifiers:
+      slug: portal-invitation-enrollment
+    attrs:
+      name: Portal invitation enrollment
+      title: Create your household portal account
+      designation: enrollment
+      authentication: require_unauthenticated
+  - model: authentik_stages_invitation.invitationstage
+    id: portal-invitation-stage
+    identifiers:
+      name: Portal invitation required
+    attrs:
+      continue_flow_without_invitation: false
+  - model: authentik_stages_prompt.prompt
+    id: portal-invitation-username-field
+    identifiers:
+      name: Portal enrollment username
+    attrs:
+      field_key: username
+      label: Username
+      type: username
+      required: true
+      placeholder: Username
+      placeholder_expression: false
+      order: 0
+  - model: authentik_stages_prompt.prompt
+    id: portal-invitation-password-field
+    identifiers:
+      name: Portal enrollment password
+    attrs:
+      field_key: password
+      label: Password
+      type: password
+      required: true
+      placeholder: Password
+      placeholder_expression: false
+      order: 1
+  - model: authentik_stages_prompt.prompt
+    id: portal-invitation-password-repeat-field
+    identifiers:
+      name: Portal enrollment password repeat
+    attrs:
+      field_key: password_repeat
+      label: Password (repeat)
+      type: password
+      required: true
+      placeholder: Password (repeat)
+      placeholder_expression: false
+      order: 2
+  - model: authentik_stages_prompt.prompt
+    id: portal-invitation-name-field
+    identifiers:
+      name: Portal enrollment name
+    attrs:
+      field_key: name
+      label: Name
+      type: text
+      required: true
+      placeholder: Name
+      placeholder_expression: false
+      order: 0
+  - model: authentik_stages_prompt.prompt
+    id: portal-invitation-email-field
+    identifiers:
+      name: Portal enrollment email
+    attrs:
+      field_key: email
+      label: Email
+      type: email
+      required: true
+      placeholder: Email
+      placeholder_expression: false
+      order: 1
+  - model: authentik_stages_prompt.promptstage
+    id: portal-invitation-credentials-stage
+    identifiers:
+      name: Portal enrollment credentials
+    attrs:
+      fields:
+        - !KeyOf portal-invitation-username-field
+        - !KeyOf portal-invitation-password-field
+        - !KeyOf portal-invitation-password-repeat-field
+  - model: authentik_stages_prompt.promptstage
+    id: portal-invitation-profile-stage
+    identifiers:
+      name: Portal enrollment profile
+    attrs:
+      fields:
+        - !KeyOf portal-invitation-name-field
+        - !KeyOf portal-invitation-email-field
+  - model: authentik_stages_user_write.userwritestage
+    id: portal-invitation-user-write
+    identifiers:
+      name: Portal enrollment user write
+    attrs:
+      user_creation_mode: always_create
+      user_type: internal
+      user_path_template: users/portal
+      create_users_group: !Find [authentik_core.group, [name, Portal - Pending]]
+  - model: authentik_policies_event_matcher.eventmatcherpolicy
+    id: portal-invitation-user-write-event
+    identifiers:
+      name: Portal invitation account creation event
+    attrs:
+      action: user_write
+  - model: authentik_events.notificationrule
+    id: portal-new-account-notification
+    identifiers:
+      name: Portal new account owner notification
+    attrs:
+      severity: notice
+      destination_group: !Find [authentik_core.group, [name, authentik Admins]]
+      destination_event_user: false
+      transports:
+        - !Find [authentik_events.notificationtransport, [name, default-local-transport]]
+  - model: authentik_stages_user_login.userloginstage
+    id: portal-invitation-login-stage
+    identifiers:
+      name: Portal enrollment login
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf portal-invitation-flow
+      stage: !KeyOf portal-invitation-stage
+      order: 5
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: true
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf portal-invitation-flow
+      stage: !KeyOf portal-invitation-credentials-stage
+      order: 10
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf portal-invitation-flow
+      stage: !KeyOf portal-invitation-profile-stage
+      order: 15
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf portal-invitation-flow
+      stage: !KeyOf portal-invitation-user-write
+      order: 20
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf portal-invitation-flow
+      stage: !KeyOf portal-invitation-login-stage
+      order: 100
+  - model: authentik_flows.flow
+    id: portal-google-pending-flow
+    identifiers:
+      slug: portal-google-pending-enrollment
+    attrs:
+      name: Portal Google pending enrollment
+      title: Create your pending household portal account
+      designation: enrollment
+      authentication: none
+  - model: authentik_stages_prompt.prompt
+    id: portal-google-pending-username-field
+    identifiers:
+      name: Portal Google enrollment username
+    attrs:
+      field_key: username
+      label: Username
+      type: username
+      required: true
+      placeholder: Username
+      placeholder_expression: false
+      order: 100
+  - model: authentik_stages_prompt.promptstage
+    id: portal-google-pending-prompt-stage
+    identifiers:
+      name: Portal Google enrollment prompt
+    attrs:
+      fields:
+        - !KeyOf portal-google-pending-username-field
+  - model: authentik_stages_user_write.userwritestage
+    id: portal-google-pending-user-write
+    identifiers:
+      name: Portal Google pending user write
+    attrs:
+      user_creation_mode: always_create
+      user_type: external
+      create_users_group: !Find [authentik_core.group, [name, Portal - Pending]]
+  - model: authentik_stages_user_login.userloginstage
+    id: portal-google-pending-login-stage
+    identifiers:
+      name: Portal Google pending user login
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf portal-google-pending-flow
+      stage: !KeyOf portal-google-pending-prompt-stage
+      order: 0
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf portal-google-pending-flow
+      stage: !KeyOf portal-google-pending-user-write
+      order: 1
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf portal-google-pending-flow
+      stage: !KeyOf portal-google-pending-login-stage
+      order: 2
+  - model: authentik_policies.policybinding
+    identifiers:
+      order: 0
+      target: !KeyOf portal-new-account-notification
+    attrs:
+      policy: !KeyOf portal-invitation-user-write-event
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
   - model: authentik_providers_proxy.proxyprovider
     id: portal-test-provider
     conditions:
@@ -51,10 +297,204 @@ entries:
       policy_engine_mode: any
       open_in_new_tab: true
       meta_hide: false
+  - model: authentik_providers_proxy.proxyprovider
+    id: portal-books-provider
+    conditions:
+      - !Env PORTAL_BOOKS_EXTERNAL_HOST
+    identifiers:
+      name: Portal Books Protected Service Provider
+    attrs:
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      internal_host: http://host.docker.internal:8087
+      external_host: !Env PORTAL_BOOKS_EXTERNAL_HOST
+      internal_host_ssl_validation: false
+      mode: proxy
+      skip_path_regex: ""
+      basic_auth_enabled: false
+      intercept_header_auth: false
+      cookie_domain: ""
+  - model: authentik_core.application
+    id: portal-books-application
+    conditions:
+      - !Env PORTAL_BOOKS_EXTERNAL_HOST
+    identifiers:
+      slug: portal-books
+    attrs:
+      name: Portal Books (Calibre)
+      provider: !KeyOf portal-books-provider
+      meta_launch_url: !Env PORTAL_BOOKS_EXTERNAL_HOST
+      meta_description: Read-only household library, protected by the Portal Public group.
+      policy_engine_mode: any
+      open_in_new_tab: true
+      meta_hide: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_BOOKS_EXTERNAL_HOST
+    identifiers:
+      order: 0
+      target: !KeyOf portal-books-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Public]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_BOOKS_EXTERNAL_HOST
+    identifiers:
+      order: 1
+      target: !KeyOf portal-books-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Family]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_BOOKS_EXTERNAL_HOST
+    identifiers:
+      order: 2
+      target: !KeyOf portal-books-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Owner]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_providers_proxy.proxyprovider
+    id: portal-audiobookshelf-provider
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST
+    identifiers:
+      name: Portal Audiobookshelf Protected Service Provider
+    attrs:
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      internal_host: http://host.docker.internal:13378
+      external_host: !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST
+      internal_host_ssl_validation: false
+      mode: proxy
+      skip_path_regex: ""
+      basic_auth_enabled: false
+      intercept_header_auth: false
+      cookie_domain: ""
+  - model: authentik_core.application
+    id: portal-audiobookshelf-application
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST
+    identifiers:
+      slug: portal-audiobookshelf
+    attrs:
+      name: Audiobookshelf
+      provider: !KeyOf portal-audiobookshelf-provider
+      meta_launch_url: !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST
+      meta_description: Audiobook service behind the household portal access gate.
+      policy_engine_mode: any
+      open_in_new_tab: true
+      meta_hide: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST
+    identifiers:
+      order: 0
+      target: !KeyOf portal-audiobookshelf-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Public]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST
+    identifiers:
+      order: 1
+      target: !KeyOf portal-audiobookshelf-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Family]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST
+    identifiers:
+      order: 2
+      target: !KeyOf portal-audiobookshelf-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Owner]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_providers_oauth2.scopemapping
+    id: portal-metrics-host-header
+    conditions:
+      - !Env PORTAL_METRICS_EXTERNAL_HOST
+    identifiers:
+      name: Portal Metrics Host Header
+    attrs:
+      scope_name: portal-metrics-host-header
+      expression: |
+        from urllib.parse import urlparse
+        parsed_url = urlparse(provider.proxyprovider.external_host)
+        return {"ak_proxy": {"host_header": parsed_url.netloc}}
+  - model: authentik_providers_proxy.proxyprovider
+    id: portal-metrics-provider
+    conditions:
+      - !Env PORTAL_METRICS_EXTERNAL_HOST
+    identifiers:
+      name: Portal Metrics Protected Service Provider
+    attrs:
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      internal_host: http://host.docker.internal:8086
+      external_host: !Env PORTAL_METRICS_EXTERNAL_HOST
+      internal_host_ssl_validation: false
+      mode: proxy
+      skip_path_regex: ""
+      basic_auth_enabled: false
+      intercept_header_auth: false
+      cookie_domain: ""
+      property_mappings:
+        - !KeyOf portal-metrics-host-header
+  - model: authentik_core.application
+    id: portal-metrics-application
+    conditions:
+      - !Env PORTAL_METRICS_EXTERNAL_HOST
+    identifiers:
+      slug: portal-metrics
+    attrs:
+      name: Mac System Metrics
+      provider: !KeyOf portal-metrics-provider
+      meta_launch_url: !Env PORTAL_METRICS_EXTERNAL_HOST
+      meta_description: Owner-only read-only aggregate system metrics.
+      policy_engine_mode: any
+      open_in_new_tab: true
+      meta_hide: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_METRICS_EXTERNAL_HOST
+    identifiers:
+      order: 0
+      target: !KeyOf portal-metrics-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Owner]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
   - model: authentik_outposts.outpost
     id: portal-test-outpost
     conditions:
-      - !Env PORTAL_TEST_EXTERNAL_HOST
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
     identifiers:
       name: authentik Embedded Outpost
     attrs:
@@ -62,6 +502,187 @@ entries:
       type: proxy
       providers:
         - !KeyOf portal-test-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+  - model: authentik_outposts.outpost
+    id: portal-both-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+  - model: authentik_outposts.outpost
+    id: portal-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-empty-outpost
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers: []
   - model: authentik_policies.policybinding
     conditions:
       - !Env PORTAL_TEST_EXTERNAL_HOST
@@ -69,8 +690,51 @@ entries:
       order: 0
       target: !KeyOf portal-test-application
     attrs:
+      group: !Find [authentik_core.group, [name, Portal - Public]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_TEST_EXTERNAL_HOST
+    identifiers:
+      order: 1
+      target: !KeyOf portal-test-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Family]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_TEST_EXTERNAL_HOST
+    identifiers:
+      order: 2
+      target: !KeyOf portal-test-application
+    attrs:
       group: !Find [authentik_core.group, [name, Portal - Owner]]
       enabled: true
       negate: false
       timeout: 30
       failure_result: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_TEST_EXTERNAL_HOST
+    identifiers:
+      order: 3
+      target: !KeyOf portal-test-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Pending]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_brands.brand
+    conditions:
+      - !Env PORTAL_TEST_EXTERNAL_HOST
+    identifiers:
+      domain: authentik-default
+    attrs:
+      default_application: !KeyOf portal-test-application

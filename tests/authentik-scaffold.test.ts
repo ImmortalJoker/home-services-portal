@@ -28,7 +28,9 @@ describe('local identity-provider scaffold', () => {
 
   it('seeds an empty optional external URL instead of publishing a guessed host', () => {
     expect(setup).toContain('PORTAL_TEST_EXTERNAL_HOST=\\n');
+    expect(setup).toContain('PORTAL_STATUS_UPSTREAM_URL=\\n');
     expect(readFileSync(resolve(process.cwd(), 'deploy/authentik/.env.example'), 'utf8')).toContain('PORTAL_TEST_EXTERNAL_HOST=');
+    expect(readFileSync(resolve(process.cwd(), 'deploy/authentik/.env.example'), 'utf8')).toContain('PORTAL_STATUS_UPSTREAM_URL=');
   });
 
   it('ignores the local environment file and persistent data', () => {
