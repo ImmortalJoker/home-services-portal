@@ -4,6 +4,8 @@ export interface ServiceItem {
   description?: string;
   url: string;
   category?: string;
+  accessGroups?: string[];
+  widget?: 'system-status';
 }
 
 export interface PortalConfig {
@@ -26,7 +28,7 @@ export function validateConfig(value: unknown): PortalConfig {
   const ids = new Set<string>();
   const services = value.services.map((item, index): ServiceItem => {
     if (!isRecord(item)) throw new Error(`Service at index ${index} must be an object.`);
-    const { id, name, description, url, category } = item;
+    const { id, name, description, url, category, accessGroups, widget } = item;
     if (!nonEmptyString(id)) throw new Error(`Service at index ${index} needs a non-empty id.`);
     if (ids.has(id)) throw new Error(`Duplicate service id: ${id}.`);
     ids.add(id);
@@ -37,17 +39,42 @@ export function validateConfig(value: unknown): PortalConfig {
     if (category !== undefined && typeof category !== 'string') {
       throw new Error(`Service ${id} category must be a string.`);
     }
-    if (!nonEmptyString(url)) throw new Error(`Service ${id} needs a URL.`);
-    let parsed: URL;
-    try {
-      parsed = new URL(url);
-    } catch {
-      throw new Error(`Service ${id} URL must be absolute.`);
+    if (widget !== undefined && widget !== 'system-status') {
+      throw new Error(`Service ${id} has an unsupported widget.`);
     }
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      throw new Error(`Service ${id} URL must use HTTP or HTTPS.`);
+    let normalizedUrl: string;
+    if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('//') && !url.includes('\\')) {
+      const parsed = new URL(url, 'https://portal.invalid');
+      normalizedUrl = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } else {
+      if (!nonEmptyString(url)) throw new Error(`Service ${id} needs a URL.`);
+      let parsed: URL;
+      try {
+        parsed = new URL(url);
+      } catch {
+        throw new Error(`Service ${id} URL must be absolute.`);
+      }
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw new Error(`Service ${id} URL must use HTTP or HTTPS.`);
+      }
+      normalizedUrl = parsed.href;
     }
-    return { id, name, description, url: parsed.href, category };
+    let normalizedGroups: string[] | undefined;
+    if (accessGroups !== undefined) {
+      if (!Array.isArray(accessGroups) || accessGroups.length === 0 || accessGroups.some((group) => !nonEmptyString(group))) {
+        throw new Error(`Service ${id} accessGroups must be a non-empty array of group names.`);
+      }
+      normalizedGroups = [...new Set(accessGroups.map((group) => group.trim()))];
+    }
+    return {
+      id,
+      name,
+      description,
+      url: normalizedUrl,
+      category,
+      ...(normalizedGroups ? { accessGroups: normalizedGroups } : {}),
+      ...(widget ? { widget } : {}),
+    };
   });
 
   return { portalName: value.portalName, services };

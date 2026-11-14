@@ -1,0 +1,12 @@
+node_modules
+.git
+.github
+coverage
+dist
+.env
+.env.*
+deploy/authentik/.env
+deploy/authentik/data
+deploy/authentik/certs
+deploy/authentik/custom-templates
+deploy/authentik/portal-services.json

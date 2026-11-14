@@ -19,7 +19,18 @@ jobs:
       - run: npm ci
       - run: npx tsc -p tsconfig.json
       - run: npm test
-      - run: npm run build
+      - run: npm run test:portal-server
+      - name: Verify Authentik Compose security boundaries
+        run: npm run test:authentik-compose
+      - name: Verify authenticated portal bundle
+        env:
+          VITE_BASE_PATH: /
+          VITE_PORTAL_PUBLIC_DEMO: 'false'
+        run: npm run build
+      - name: Build public Pages demo
+        env:
+          VITE_PORTAL_PUBLIC_DEMO: 'true'
+        run: npm run build
       - name: Verify GitHub Pages asset paths
         run: node -e "const fs=require('fs');const html=fs.readFileSync('dist/index.html','utf8');if(!html.includes('/home-services-portal/assets/'))throw new Error('Pages asset base path missing')"
       - uses: actions/upload-pages-artifact@v3
