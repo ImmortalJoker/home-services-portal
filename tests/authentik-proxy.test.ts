@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { loadAuthentikBlueprint } from './helpers/authentikBlueprint';
 
 const compose = readFileSync(resolve(process.cwd(), 'deploy/authentik/compose.yml'), 'utf8');
+const authentikEnvExample = readFileSync(resolve(process.cwd(), 'deploy/authentik/.env.example'), 'utf8');
+const authentikSetup = readFileSync(resolve(process.cwd(), 'deploy/authentik/setup-local.sh'), 'utf8');
 const portalDockerfile = readFileSync(resolve(process.cwd(), 'deploy/authentik/portal/Dockerfile'), 'utf8');
 const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
 const blueprint = loadAuthentikBlueprint();
@@ -95,6 +97,9 @@ describe('protected Authentik portal demo', () => {
     const defaultBrand = blueprint.entries.find((item) => item.model === 'authentik_brands.brand' && item.identifiers?.domain === 'authentik-default');
     expect(defaultBrand?.conditions).toEqual(['PORTAL_TEST_EXTERNAL_HOST']);
     expect(defaultBrand?.attrs?.default_application).toBe('portal-test-application');
+    expect(defaultBrand?.attrs?.flow_user_switch).toEqual([
+      'authentik_flows.flow', ['slug', 'default-authentication-flow'],
+    ]);
   });
 
   it('configures a local Authentik Admins notification rule for User Write events', () => {
@@ -160,9 +165,11 @@ describe('protected Authentik portal demo', () => {
       ['PORTAL_BOOKS_EXTERNAL_HOST', 'portal-books-provider'],
       ['PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST', 'portal-audiobookshelf-provider'],
       ['PORTAL_METRICS_EXTERNAL_HOST', 'portal-metrics-provider'],
+      ['PORTAL_TRANSMISSION_EXTERNAL_HOST', 'portal-transmission-provider'],
+      ['PORTAL_GROCY_EXTERNAL_HOST', 'portal-grocy-provider'],
     ] as const;
 
-    expect(outposts).toHaveLength(16);
+    expect(outposts).toHaveLength(64);
     for (let combination = 0; combination < 2 ** optionalHosts.length; combination += 1) {
       const environment = Object.fromEntries(optionalHosts.map(([variable], index) => [
         variable,
@@ -204,9 +211,22 @@ describe('protected Authentik portal demo', () => {
     expect(provider?.attrs?.external_host).toBe('PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST');
     expect(application?.identifiers?.slug).toBe('portal-audiobookshelf');
     expect(application?.attrs?.provider).toBe('portal-audiobookshelf-provider');
+    expect(application?.attrs?.meta_hide).toBe(true);
     expect(bindings.map((binding) => binding.identifiers?.order)).toEqual([0, 1, 2]);
     expect(bindings.map(policyGroupName)).toEqual(['Portal - Public', 'Portal - Family', 'Portal - Owner']);
     expect(bindings.every((binding) => binding.conditions?.[0] === 'PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST')).toBe(true);
+  });
+
+  it('uses exact native-route callbacks for web, mobile and logout without the retired gateway', () => {
+    const provider = blueprint.entries.find((item) => item.id === 'portal-audiobookshelf-oidc-provider');
+    const redirectUris = provider?.attrs?.redirect_uris as Array<Record<string, unknown>>;
+    expect(redirectUris).toHaveLength(3);
+    expect(redirectUris.map((uri) => uri.matching_mode)).toEqual(['strict', 'strict', 'strict']);
+    expect(redirectUris.map((uri) => uri.url)).toEqual([
+      'PORTAL_AUDIOBOOKSHELF_OIDC_WEB_CALLBACK_URL',
+      'PORTAL_AUDIOBOOKSHELF_OIDC_MOBILE_CALLBACK_URL',
+      'PORTAL_AUDIOBOOKSHELF_OIDC_LOGOUT_CALLBACK_URL',
+    ]);
   });
 
   it('defines an opt-in Owner-only metrics proxy with the accepted host header', () => {
@@ -226,6 +246,160 @@ describe('protected Authentik portal demo', () => {
     expect(application?.attrs?.provider).toBe('portal-metrics-provider');
     expect(bindings.map(policyGroupName)).toEqual(['Portal - Owner']);
     expect(bindings.every((binding) => binding.conditions?.[0] === 'PORTAL_METRICS_EXTERNAL_HOST')).toBe(true);
+  });
+
+  it('defines an opt-in Owner-only Transmission proxy with the accepted RPC Host header', () => {
+    const provider = blueprint.entries.find((item) => item.id === 'portal-transmission-provider');
+    const mapping = blueprint.entries.find((item) => item.id === 'portal-transmission-host-header');
+    const application = blueprint.entries.find((item) => item.id === 'portal-transmission-application');
+    const bindings = blueprint.entries.filter((item) =>
+      item.model === 'authentik_policies.policybinding' && item.identifiers?.target === 'portal-transmission-application');
+
+    expect(provider?.conditions).toEqual(['PORTAL_TRANSMISSION_EXTERNAL_HOST']);
+    expect(provider?.attrs?.internal_host).toBe('http://host.docker.internal:9091');
+    expect(provider?.attrs?.external_host).toBe('PORTAL_TRANSMISSION_EXTERNAL_HOST');
+    expect(provider?.attrs?.property_mappings).toEqual(['portal-transmission-host-header']);
+    expect(mapping?.model).toBe('authentik_providers_oauth2.scopemapping');
+    expect(mapping?.attrs?.expression).toContain('127.0.0.1:9091');
+    expect(application?.identifiers?.slug).toBe('portal-transmission');
+    expect(application?.attrs?.provider).toBe('portal-transmission-provider');
+    expect(bindings.map(policyGroupName)).toEqual(['Portal - Owner']);
+    expect(bindings.every((binding) => binding.conditions?.[0] === 'PORTAL_TRANSMISSION_EXTERNAL_HOST')).toBe(true);
+  });
+
+  it('supplies Transmission RPC Basic credentials only from blank-by-default Owner group attributes', () => {
+    const provider = blueprint.entries.find((item) => item.id === 'portal-transmission-provider');
+    const ownerGroup = blueprint.entries.find((item) => item.identifiers?.name === 'Portal - Owner' && item.model === 'authentik_core.group');
+    const bindings = blueprint.entries.filter((item) =>
+      item.model === 'authentik_policies.policybinding' && item.identifiers?.target === 'portal-transmission-application');
+    const userKey = provider?.attrs?.basic_auth_user_attribute;
+    const passwordKey = provider?.attrs?.basic_auth_password_attribute;
+    const ownerAttributes = ownerGroup?.attrs?.attributes as Record<string, unknown> | undefined;
+
+    expect(provider?.attrs?.basic_auth_enabled).toBe(true);
+    expect(userKey).toBe('portal_transmission_rpc_username');
+    expect(passwordKey).toBe('portal_transmission_rpc_password');
+    expect(ownerAttributes?.[userKey as string]).toBe('PORTAL_TRANSMISSION_RPC_USERNAME');
+    expect(ownerAttributes?.[passwordKey as string]).toBe('PORTAL_TRANSMISSION_RPC_PASSWORD');
+    expect(bindings.map(policyGroupName)).toEqual(['Portal - Owner']);
+    for (const name of ['PORTAL_TRANSMISSION_RPC_USERNAME', 'PORTAL_TRANSMISSION_RPC_PASSWORD']) {
+      expect(compose).toContain(`${name}: \${${name}:-}`);
+      expect(authentikEnvExample).toMatch(new RegExp(`^${name}=$`, 'm'));
+      expect(authentikSetup).toContain(`${name}=\\n`);
+    }
+    const sources = [compose, authentikEnvExample, authentikSetup, readFileSync(resolve(process.cwd(), 'deploy/authentik/README.md'), 'utf8'),
+      readFileSync(resolve(process.cwd(), 'deploy/authentik/blueprints/portal-access-groups.yaml'), 'utf8')];
+    for (const source of sources) {
+      expect(source).not.toMatch(/^[ \t]*PORTAL_TRANSMISSION_RPC_(?:USERNAME|PASSWORD)[ \t]*[=:][ \t]*(?!\$\{)\S/m);
+      expect(source).not.toMatch(/^[ \t]*portal_transmission_rpc_(?:username|password):[ \t]*(?!\!Env\b)\S/m);
+    }
+  });
+
+  it('defines an opt-in Immich OIDC client with email-based auto-registration and Family/Owner access', () => {
+    const provider = blueprint.entries.find((item) => item.id === 'portal-immich-oidc-provider');
+    const mapping = blueprint.entries.find((item) => item.id === 'portal-immich-profile');
+    const application = blueprint.entries.find((item) => item.id === 'portal-immich-oidc-application');
+    const bindings = blueprint.entries.filter((item) =>
+      item.model === 'authentik_policies.policybinding' && item.identifiers?.target === 'portal-immich-oidc-application');
+
+    expect(provider?.conditions).toEqual([
+      'PORTAL_IMMICH_OIDC_CLIENT_SECRET',
+      'PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL',
+      'PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL',
+      'PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL',
+      'PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL',
+      'PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL',
+    ]);
+    const redirectUris = provider?.attrs?.redirect_uris as unknown[];
+    expect(redirectUris[0]).toEqual([
+      'AND',
+      'PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL',
+      'PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL',
+      'PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL',
+      'PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL',
+    ]);
+    const withHttpsAndTailnet = redirectUris[1] as Array<Record<string, string>>;
+    expect(withHttpsAndTailnet).toHaveLength(9);
+    expect(withHttpsAndTailnet.slice(5)).toEqual([
+      { matching_mode: 'strict', url: 'PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL', redirect_uri_type: 'authorization' },
+      { matching_mode: 'strict', url: 'PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL', redirect_uri_type: 'authorization' },
+      { matching_mode: 'strict', url: 'PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL', redirect_uri_type: 'authorization' },
+      { matching_mode: 'strict', url: 'PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL', redirect_uri_type: 'authorization' },
+    ]);
+    expect(withHttpsAndTailnet.every((uri) => uri.matching_mode === 'strict')).toBe(true);
+
+    const withoutTailnetCondition = redirectUris[2] as unknown[];
+    expect(withoutTailnetCondition[0]).toEqual([
+      'AND',
+      'PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL',
+      'PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL',
+    ]);
+    expect(withoutTailnetCondition[1]).toHaveLength(7);
+    const withoutHttpsCondition = withoutTailnetCondition[2] as unknown[];
+    expect(withoutHttpsCondition[0]).toEqual([
+      'AND',
+      'PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL',
+      'PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL',
+    ]);
+    const withTailnetCallbacks = withoutHttpsCondition[1] as Array<Record<string, string>>;
+    expect(withTailnetCallbacks).toHaveLength(7);
+    expect(withTailnetCallbacks.slice(5)).toEqual([
+      {
+        matching_mode: 'strict',
+        url: 'PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL',
+        redirect_uri_type: 'authorization',
+      },
+      {
+        matching_mode: 'strict',
+        url: 'PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL',
+        redirect_uri_type: 'authorization',
+      },
+    ]);
+    expect(withTailnetCallbacks.every((uri) => uri.matching_mode === 'strict')).toBe(true);
+    expect(withoutHttpsCondition[2]).toHaveLength(5);
+    expect(provider?.attrs?.client_type).toBe('confidential');
+    expect(provider?.attrs?.grant_types).toEqual(['authorization_code']);
+    expect(provider?.attrs?.property_mappings).toEqual([
+      ['authentik_providers_oauth2.scopemapping', ['scope_name', 'openid']],
+      ['authentik_providers_oauth2.scopemapping', ['scope_name', 'email']],
+      'portal-immich-profile',
+    ]);
+    expect(mapping?.attrs?.scope_name).toBe('profile');
+    expect(mapping?.attrs?.expression).not.toContain('email');
+    expect(mapping?.attrs?.expression).not.toContain('immich_role');
+    expect(application?.attrs?.meta_description).toContain('Email-based auto-registration');
+    expect(application?.identifiers?.slug).toBe('portal-immich-oidc');
+    expect(application?.attrs?.provider).toBe('portal-immich-oidc-provider');
+    expect(bindings.map(binding => policyGroupName(binding))).toEqual(['Portal - Family', 'Portal - Owner']);
+    expect(compose).toContain('PORTAL_IMMICH_OIDC_CLIENT_SECRET');
+    expect(compose).toContain('PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL');
+    expect(compose).toContain('PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL');
+    expect(authentikEnvExample).toContain('PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL');
+    expect(authentikEnvExample).toContain('PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL');
+    expect(authentikEnvExample).toContain('PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL');
+    expect(authentikSetup).toContain('PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL=');
+    expect(authentikSetup).toContain('PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL=');
+  });
+
+  it('defines an opt-in Family and Owner-only Grocy gateway without Public access', () => {
+    const provider = blueprint.entries.find((item) => item.id === 'portal-grocy-provider');
+    const application = blueprint.entries.find((item) => item.id === 'portal-grocy-application');
+    const bindings = blueprint.entries.filter((item) =>
+      item.model === 'authentik_policies.policybinding' && item.identifiers?.target === 'portal-grocy-application');
+
+    expect(provider?.conditions).toEqual(['PORTAL_GROCY_EXTERNAL_HOST']);
+    expect(provider?.attrs?.internal_host).toBe('PORTAL_GROCY_INTERNAL_HOST');
+    expect(provider?.attrs?.external_host).toBe('PORTAL_GROCY_EXTERNAL_HOST');
+    expect(provider?.attrs?.mode).toBe('proxy');
+    expect(provider?.attrs?.skip_path_regex).toBe('');
+    expect(compose).toContain('PORTAL_GROCY_INTERNAL_HOST');
+    expect(authentikEnvExample).not.toContain('PORTAL_GROCY_API_KEY_PATH_REGEX=');
+    expect(application?.identifiers?.slug).toBe('portal-grocy');
+    expect(application?.attrs?.provider).toBe('portal-grocy-provider');
+    expect(bindings.map((binding) => binding.identifiers?.order)).toEqual([0, 1]);
+    expect(bindings.map(policyGroupName)).toEqual(['Portal - Family', 'Portal - Owner']);
+    expect(bindings.every((binding) => binding.conditions?.[0] === 'PORTAL_GROCY_EXTERNAL_HOST')).toBe(true);
+    expect(compose).toContain('PORTAL_GROCY_EXTERNAL_HOST');
   });
 
   it('ships separate Public, Family, and Owner demo routes in its access config', () => {

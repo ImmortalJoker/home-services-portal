@@ -21,6 +21,11 @@ const customTags = [
     collection: 'seq' as const,
     nodeClass: YAMLSeq,
   },
+  {
+    ...passthroughTag('!If'),
+    collection: 'seq' as const,
+    nodeClass: YAMLSeq,
+  },
 ];
 
 export type BlueprintEntry = {

@@ -1,0 +1,27 @@
+# Opt-in addition to compose.yml; never merge with a Grocy service that publishes ports.
+# Requires an explicitly selected/pinned linuxserver/grocy-compatible image and
+# an operator-provisioned config directory. This does not migrate existing data.
+services:
+  server:
+    networks:
+      default: {}
+      grocy_private: {}
+
+  grocy:
+    image: ${GROCY_IMAGE:?Set a pinned Grocy image compatible with /config and port 80}
+    restart: unless-stopped
+    volumes:
+      - ${GROCY_CONFIG_PATH:?Set the provisioned Grocy config directory}:/config
+    environment:
+      PUID: ${GROCY_PUID:?Set the existing Grocy UID}
+      PGID: ${GROCY_PGID:?Set the existing Grocy GID}
+      TZ: ${GROCY_TZ:?Set the existing Grocy timezone}
+    # Intentionally no ports, host networking, or default-network attachment.
+    networks:
+      grocy_private:
+        aliases:
+          - grocy
+
+networks:
+  grocy_private:
+    internal: true

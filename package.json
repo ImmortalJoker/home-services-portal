@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:authentik-compose": "node scripts/verify-authentik-compose.mjs",
+    "test:grocy-proxy-config": "node --test tests/grocy-proxy-config.test.mjs",
+    "test:grocy-proxy": "node --test tests/grocy-proxy.test.mjs",
     "test:portal-server": "node --test tests/portal-server.test.mjs tests/portal-launch.test.mjs tests/portal-worker.test.mjs tests/live-panels.test.mjs",
     "test:authentik-runtime": "node scripts/verify-authentik-runtime.mjs"
   },
