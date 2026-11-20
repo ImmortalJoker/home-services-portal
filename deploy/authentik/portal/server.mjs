@@ -4,6 +4,9 @@ import { createServer, request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validateLaunch } from './launch.mjs';
+import { requestTransmissionSummary } from './transmission.mjs';
+import { validateGuides } from './guides.mjs';
 
 const PUBLIC_GROUP = 'Portal - Public';
 const FAMILY_GROUP = 'Portal - Family';
@@ -16,7 +19,9 @@ const contentTypes = new Map([
   ['.ico', 'image/x-icon'],
   ['.js', 'text/javascript; charset=utf-8'],
   ['.json', 'application/json; charset=utf-8'],
+  ['.png', 'image/png'],
   ['.svg', 'image/svg+xml'],
+  ['.webmanifest', 'application/manifest+json; charset=utf-8'],
   ['.woff2', 'font/woff2'],
 ]);
 
@@ -77,14 +82,27 @@ export function validatePortalConfig(value) {
     if (widget === 'system-status' && !normalizedGroups.includes(OWNER_GROUP)) {
       throw new Error(`Service ${id} system-status widget must be restricted to Portal - Owner.`);
     }
+    const url = normalizeServiceUrl(service.url, id);
+    const launch = validateLaunch(service.launch, id, url);
+    const guides = validateGuides(service.guides);
+    let opdsUrl;
+    if (service.opdsUrl !== undefined) {
+      if (typeof service.opdsUrl !== 'string') throw new Error(`Service ${id} OPDS URL must use HTTPS.`);
+      const parsed = new URL(service.opdsUrl);
+      if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error(`Service ${id} OPDS URL must use credential-free HTTPS.`);
+      opdsUrl = parsed.href;
+    }
     return {
       id,
       name: name.trim(),
       description,
       category,
-      url: normalizeServiceUrl(service.url, id),
+      url,
       accessGroups: normalizedGroups,
       ...(widget ? { widget } : {}),
+      ...(launch ? { launch } : {}),
+      ...(guides ? { guides } : {}),
+      ...(opdsUrl ? { opdsUrl } : {}),
     };
   });
   return { portalName: value.portalName.trim(), services };
@@ -275,9 +293,18 @@ export function createPortalServer({
   statusUpstreamUrl = process.env.PORTAL_STATUS_UPSTREAM_URL ?? '',
   statusExternalUrl = process.env.PORTAL_STATUS_EXTERNAL_URL ?? '',
   statusRequester = requestSystemStatus,
+  transmissionRequester = requestTransmissionSummary,
 } = {}) {
   const validatedConfig = validatePortalConfig(config);
   const hasSystemStatusWidget = validatedConfig.services.some((service) => service.widget === 'system-status');
+  const transmissionService = validatedConfig.services.find(service => service.id === 'transmission');
+  if (transmissionService && (transmissionService.accessGroups.length !== 1 || transmissionService.accessGroups[0] !== OWNER_GROUP)) throw new Error('Transmission must be Owner-only.');
+  let frameOrigin = null;
+  if (transmissionService) {
+    const url = new URL(transmissionService.url);
+    if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Transmission requires credential-free HTTPS.');
+    frameOrigin = url.origin;
+  }
   let statusSource = null;
   if (statusUpstreamUrl || statusExternalUrl) {
     if (!statusUpstreamUrl || !statusExternalUrl) {
@@ -307,6 +334,7 @@ export function createPortalServer({
   const staticDir = resolve(distDir ?? process.env.PORTAL_DIST_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../../dist'));
   return createServer(async (request, response) => {
     setSecurityHeaders(response);
+    if (frameOrigin && getIdentity(request).identity?.role === 'Owner') response.setHeader('Content-Security-Policy', response.getHeader('Content-Security-Policy') + `; frame-src ${frameOrigin}`);
     const method = request.method ?? 'GET';
     if (method !== 'GET' && method !== 'HEAD') {
       response.setHeader('Allow', 'GET, HEAD');
@@ -376,6 +404,19 @@ export function createPortalServer({
       } catch {
         sendJson(response, 502, { error: 'System status is temporarily unavailable.' }, method);
       }
+      return;
+    }
+
+    if (routePath === '/api/transmission-status') {
+      const auth = getIdentity(request);
+      if (auth.status !== 200) { sendJson(response, auth.status, { error: 'Authentication required.' }, method); return; }
+      if (auth.identity.role !== 'Owner' || !transmissionService) { sendJson(response, 403, { error: 'Owner access required.' }, method); return; }
+      try {
+        const data = await transmissionRequester();
+        const fields = ['active', 'total', 'percent', 'download_bps', 'upload_bps'];
+        if (!data || !fields.every(k => k === 'percent' && data[k] === null || Number.isFinite(data[k]) && data[k] >= 0) || data.active > data.total || data.percent > 100) throw new Error('Invalid summary');
+        sendJson(response, 200, Object.fromEntries(fields.map(k => [k, data[k]])), method);
+      } catch { sendJson(response, 502, { error: 'Transmission status is temporarily unavailable.' }, method); }
       return;
     }
 

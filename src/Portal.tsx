@@ -1,5 +1,12 @@
 import type { PortalConfig } from './config';
+import { useState } from 'react';
 import { SystemStatusWidget } from './SystemStatusWidget';
+import { detectMobilePlatform, getAppLaunch } from '../deploy/authentik/portal/launch.mjs';
+import './service-launch.css';
+import { InstallPortal } from './InstallPortal';
+import { ServiceIcon } from './ServiceIcon';
+import { AppRecommendations } from './AppRecommendations';
+import { TransmissionCard } from './TransmissionCard';
 
 export interface PortalIdentity {
   username: string;
@@ -8,20 +15,39 @@ export interface PortalIdentity {
   role: 'Pending' | 'Public' | 'Family' | 'Owner';
 }
 
-export function Portal({ config, identity }: { config: PortalConfig; identity?: PortalIdentity }) {
+type Connection = 'local' | 'tailscale' | 'unknown';
+function PortalHeader({ config, identity, connection, pending = false }: { config: PortalConfig; identity?: PortalIdentity; connection: Connection; pending?: boolean }) {
+  const [accountOpen, setAccountOpen] = useState(false);
+  const routeLabel = connection === 'local' ? 'Local network' : connection === 'tailscale' ? 'Tailscale' : 'Connection unknown';
+  return <header className="hero portal-header">
+    <div className="portal-heading"><div className="portal-title-line">
+      <span className={`connection-indicator connection-${connection}`} role="status" aria-label={routeLabel} title={routeLabel}><span aria-hidden="true" /></span>
+      <h1 title={config.portalName}>{config.portalName}</h1><span className="connection-label">{routeLabel}</span>
+    </div><p>{pending ? 'Your account is signed in; service access is still being reviewed.' : 'Your household services, together.'}</p></div>
+    <div className="portal-header-actions">
+      {identity && <div className="identity-badge" aria-label="Signed-in account">
+        <button className="identity-menu-toggle" type="button" aria-label="Account menu" aria-expanded={accountOpen} aria-controls="portal-account-menu" onClick={() => setAccountOpen(!accountOpen)} onKeyDown={event => { if (event.key === 'Escape') setAccountOpen(false); }}>
+          <span aria-hidden="true">{identity.name.trim().charAt(0).toUpperCase() || identity.username.charAt(0).toUpperCase()}</span>
+        </button>
+        <span className="identity-avatar" aria-hidden="true">{identity.name.trim().charAt(0).toUpperCase() || identity.username.charAt(0).toUpperCase()}</span>
+        <span className="identity-copy"><strong>{identity.name || identity.username}</strong><small>{pending ? 'Access pending' : `${identity.role} access`}</small></span>
+        <a className="identity-signout" href="/outpost.goauthentik.io/sign_out">Sign out</a>
+        {accountOpen && <div className="identity-mobile-menu" id="portal-account-menu" onKeyDown={event => { if (event.key === 'Escape') setAccountOpen(false); }}>
+          <strong>{identity.name || identity.username}</strong><small>{pending ? 'Access pending' : `${identity.role} access`}</small>
+          <a href="/outpost.goauthentik.io/sign_out">Sign out</a>
+        </div>}
+      </div>}
+      {!pending && <InstallPortal />}
+    </div>
+  </header>;
+}
+
+export function Portal({ config, identity, connection = 'unknown' }: { config: PortalConfig; identity?: PortalIdentity; connection?: Connection }) {
+  const platform = detectMobilePlatform(typeof navigator === 'undefined' ? undefined : navigator);
   if (identity?.role === 'Pending') {
     return (
       <main className="shell">
-        <header className="hero">
-          <div className="eyebrow"><span className="pulse" /> HOME NETWORK</div>
-          <h1>{config.portalName}</h1>
-          <p>Your account is signed in; service access is still being reviewed.</p>
-          <div className="identity-badge" aria-label="Signed-in account">
-            <span className="identity-avatar" aria-hidden="true">{identity.name.trim().charAt(0).toUpperCase() || identity.username.charAt(0).toUpperCase()}</span>
-            <span className="identity-copy"><strong>{identity.name || identity.username}</strong><small>Access pending</small></span>
-            <a className="identity-signout" href="/outpost.goauthentik.io/sign_out">Sign out</a>
-          </div>
-        </header>
+        <PortalHeader config={config} identity={identity} connection={connection} pending />
         <section className="atrium" aria-labelledby="atrium-title">
           <span className="atrium-mark" aria-hidden="true">⌛</span>
           <div>
@@ -36,24 +62,10 @@ export function Portal({ config, identity }: { config: PortalConfig; identity?: 
     );
   }
 
-  const groups = new Map<string, PortalConfig['services']>();
-  for (const service of config.services) {
-    const category = service.category?.trim() || 'Other services';
-    groups.set(category, [...(groups.get(category) ?? []), service]);
-  }
-
   return (
     <main className="shell">
-      <header className="hero">
-        <div className="eyebrow"><span className="pulse" /> HOME NETWORK</div>
-        <h1>{config.portalName}</h1>
-        <p>{identity ? 'Your services, personalized by your portal access.' : 'Your household services, together in one place.'}</p>
-        {identity && <div className="identity-badge" aria-label="Signed-in account">
-          <span className="identity-avatar" aria-hidden="true">{identity.name.trim().charAt(0).toUpperCase() || identity.username.charAt(0).toUpperCase()}</span>
-          <span className="identity-copy"><strong>{identity.name || identity.username}</strong><small>{identity.role} access</small></span>
-          <a className="identity-signout" href="/outpost.goauthentik.io/sign_out">Sign out</a>
-        </div>}
-      </header>
+      <PortalHeader config={config} identity={identity} connection={connection} />
+      {config.services.filter(service => service.widget === 'system-status').map(service => <SystemStatusWidget key={service.id} service={service} />)}
       {config.services.length === 0 ? (
         <section className="empty" aria-label="No services configured">
           <span className="empty-icon" aria-hidden="true">＋</span>
@@ -61,28 +73,31 @@ export function Portal({ config, identity }: { config: PortalConfig; identity?: 
           <p>Add your services to <code>public/services.json</code> to get started.</p>
         </section>
       ) : (
-        [...groups].map(([category, services]) => (
-          <section className="service-group" key={category} aria-label={category}>
-            <div className="group-heading">
-              <h2>{category}</h2><span className="count">{String(services.length).padStart(2, '0')}</span>
-            </div>
-            <div className="service-grid">
-              {services.map((service, index) => (
-                service.widget === 'system-status'
-                  ? <SystemStatusWidget key={service.id} service={service} />
-                  : <a className="service-card" href={service.url} key={service.id} target="_blank" rel="noreferrer">
-                    <span className={`card-mark mark-${index % 4}`} aria-hidden="true">{service.name.trim().charAt(0).toUpperCase()}</span>
+          <section className="service-group" aria-label="Services">
+            <div className="service-grid portal-tiles">
+              {config.services.filter(service => service.widget !== 'system-status').map((service, index) => {
+                if (service.id === 'transmission') return <TransmissionCard key={service.id} service={service} />;
+                const app = getAppLaunch(service, platform);
+                const webLink = <a className="service-card" href={service.url} target="_blank" rel="noreferrer" aria-label={`Open ${service.name}`} title={service.description}>
+                    <span className={`card-mark mark-${index % 4}`}><ServiceIcon id={service.id} name={service.name} /></span>
                     <span className="card-copy">
                       <strong>{service.name}</strong>
-                      <span>{service.description || 'Open service'}</span>
                     </span>
-                    <span className="arrow" aria-hidden="true">↗</span>
-                  </a>
-              ))}
+                  </a>;
+                return <article className="service-tile" key={service.id} aria-label={service.name}>
+                  {webLink}
+                  {(app || service.opdsUrl) && <div className="service-launch-actions">
+                    {app && <><a className="service-launch-app" href={app.href} aria-label={`Open ${service.name} in ${app.label}`} referrerPolicy="no-referrer">App</a>
+                    <a className="service-launch-web" href={service.url} target="_blank" rel="noreferrer" aria-label={`Open ${service.name} in browser`}>Open web</a>
+                    </>}
+                    {service.opdsUrl && <a className="service-launch-web" href={service.opdsUrl} target="_blank" rel="noreferrer" aria-label={`Open ${service.name} OPDS`}>OPDS</a>}
+                  </div>}
+                </article>;
+              })}
             </div>
           </section>
-        ))
       )}
+      <AppRecommendations services={config.services} />
       <footer><span>SELF-HOSTED · CONFIGURABLE · YOURS</span><span>Home Services Portal <b>↗</b></span></footer>
     </main>
   );

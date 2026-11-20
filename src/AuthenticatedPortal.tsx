@@ -13,7 +13,7 @@ interface PortalIdentity {
 
 type PortalView =
   | { state: 'loading' }
-  | { state: 'authenticated'; config: PortalConfig; identity: PortalIdentity }
+  | { state: 'authenticated'; config: PortalConfig; identity: PortalIdentity; connection: 'local' | 'tailscale' | 'unknown' }
   | { state: 'denied' }
   | { state: 'error' };
 
@@ -64,7 +64,8 @@ export function AuthenticatedPortal() {
         if (!active) return;
         if (!isPortalPayload(payload)) throw new Error('Portal API returned an invalid response.');
         const config = validateConfig({ portalName: payload.portalName, services: payload.services });
-        setView({ state: 'authenticated', config, identity: payload.identity });
+        const route = response.headers.get('X-Portal-Connection');
+        setView({ state: 'authenticated', config, identity: payload.identity, connection: route === 'local' || route === 'tailscale' ? route : 'unknown' });
       } catch {
         if (active) setView({ state: 'error' });
       }
@@ -89,5 +90,5 @@ export function AuthenticatedPortal() {
       <p>Refresh the page. If the problem continues, ask the owner to check the portal service.</p>
     </main>;
   }
-  return <Portal config={view.config} identity={view.identity} />;
+  return <Portal config={view.config} identity={view.identity} connection={view.connection} />;
 }
