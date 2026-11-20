@@ -1,10 +1,11 @@
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
-import { createServer, request as httpRequest } from 'node:http';
-import { request as httpsRequest } from 'node:https';
+import { createServer } from 'node:http';
 import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requestJson } from './http.mjs';
 import { validateLaunch } from './launch.mjs';
+import { normalizeServiceUrl, validateOpdsUrl } from './urls.mjs';
 import { requestTransmissionSummary } from './transmission.mjs';
 import { validateGuides } from './guides.mjs';
 
@@ -27,25 +28,6 @@ const contentTypes = new Map([
 
 function nonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
-}
-
-function normalizeServiceUrl(value, id) {
-  if (!nonEmptyString(value)) throw new Error(`Service ${id} needs a URL.`);
-  const url = value.trim();
-  if (url.startsWith('/') && !url.startsWith('//') && !url.includes('\\')) {
-    const parsed = new URL(url, 'http://portal.invalid');
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  }
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(`Service ${id} URL must be absolute or a same-origin path.`);
-  }
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error(`Service ${id} URL must use HTTP or HTTPS.`);
-  }
-  return parsed.href;
 }
 
 export function validatePortalConfig(value) {
@@ -85,13 +67,7 @@ export function validatePortalConfig(value) {
     const url = normalizeServiceUrl(service.url, id);
     const launch = validateLaunch(service.launch, id, url);
     const guides = validateGuides(service.guides);
-    let opdsUrl;
-    if (service.opdsUrl !== undefined) {
-      if (typeof service.opdsUrl !== 'string') throw new Error(`Service ${id} OPDS URL must use HTTPS.`);
-      const parsed = new URL(service.opdsUrl);
-      if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error(`Service ${id} OPDS URL must use credential-free HTTPS.`);
-      opdsUrl = parsed.href;
-    }
+    const opdsUrl = validateOpdsUrl(service.opdsUrl, id);
     return {
       id,
       name: name.trim(),
@@ -183,47 +159,16 @@ function validSystemStatus(value) {
     Number.isInteger(value.updated_at) && value.updated_at > 0;
 }
 
-function requestSystemStatus(url, host) {
-  return new Promise((resolve, reject) => {
-    const target = new URL(url);
-    const requester = target.protocol === 'https:' ? httpsRequest : httpRequest;
-    const req = requester(target, {
-      method: 'GET',
-      headers: { Accept: 'application/json', Host: host },
-      timeout: 5000,
-    }, (res) => {
-      const chunks = [];
-      let size = 0;
-      res.on('data', (chunk) => {
-        size += chunk.length;
-        if (size > 64 * 1024) {
-          req.destroy(new Error('System status response exceeded the size limit.'));
-          return;
-        }
-        chunks.push(chunk);
-      });
-      res.on('end', () => {
-        const contentType = res.headers['content-type'] ?? '';
-        let payload;
-        try {
-          payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        } catch {
-          payload = null;
-        }
-        resolve({ statusCode: res.statusCode ?? 502, contentType, payload });
-      });
-    });
-    req.on('timeout', () => req.destroy(new Error('System status request timed out.')));
-    req.on('error', reject);
-    req.end();
-  });
+async function requestSystemStatus(url, host) {
+  const { statusCode, headers, payload } = await requestJson(url, { headers: { Host: host } });
+  return { statusCode, contentType: headers['content-type'] ?? '', payload };
 }
 
 function setSecurityHeaders(response) {
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('X-Frame-Options', 'DENY');
   response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+  response.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
 }
 
 function sendJson(response, status, payload, method = 'GET') {
@@ -413,8 +358,9 @@ export function createPortalServer({
       if (auth.identity.role !== 'Owner' || !transmissionService) { sendJson(response, 403, { error: 'Owner access required.' }, method); return; }
       try {
         const data = await transmissionRequester();
-        const fields = ['active', 'total', 'percent', 'download_bps', 'upload_bps'];
-        if (!data || !fields.every(k => k === 'percent' && data[k] === null || Number.isFinite(data[k]) && data[k] >= 0) || data.active > data.total || data.percent > 100) throw new Error('Invalid summary');
+        const fields = ['downloading', 'active', 'total', 'percent', 'download_bps', 'upload_bps'];
+        if (!data || !fields.every(k => k === 'percent' && data[k] === null || Number.isFinite(data[k]) && data[k] >= 0) ||
+            data.downloading > data.active || data.active > data.total || data.percent > 100) throw new Error('Invalid summary');
         sendJson(response, 200, Object.fromEntries(fields.map(k => [k, data[k]])), method);
       } catch { sendJson(response, 502, { error: 'Transmission status is temporarily unavailable.' }, method); }
       return;

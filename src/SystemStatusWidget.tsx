@@ -18,7 +18,7 @@ interface SystemStatus {
 
 type StatusView =
   | { state: 'loading' }
-  | { state: 'loaded'; status: SystemStatus }
+  | { state: 'loaded'; status: SystemStatus; stale: boolean }
   | { state: 'error' };
 
 function isSystemStatus(value: unknown): value is SystemStatus {
@@ -69,13 +69,16 @@ function MetricMeter({ label, percent, detail }: { label: string; percent: numbe
 export function SystemStatusWidget({ service }: { service: ServiceItem }) {
   const [view, setView] = useState<StatusView>({ state: 'loading' });
   const [refreshIndex, setRefreshIndex] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
 
     async function load() {
-      setView({ state: 'loading' });
+      // Keep the last reading visible while polling; only show the loading state before any data exists.
+      setRefreshing(true);
+      setView((current) => current.state === 'loaded' ? current : { state: 'loading' });
       try {
         const apiUrl = new URL(`${import.meta.env.BASE_URL}api/system-status`, window.location.origin);
         const response = await fetch(apiUrl, {
@@ -90,9 +93,11 @@ export function SystemStatusWidget({ service }: { service: ServiceItem }) {
         const payload: unknown = await response.json();
         if (!active) return;
         if (!isSystemStatus(payload)) throw new Error('System status response was invalid.');
-        setView({ state: 'loaded', status: payload });
+        setView({ state: 'loaded', status: payload, stale: false });
       } catch {
-        if (active) setView({ state: 'error' });
+        if (active) setView((current) => current.state === 'loaded' ? { ...current, stale: true } : { state: 'error' });
+      } finally {
+        if (active) setRefreshing(false);
       }
     }
 
@@ -116,13 +121,14 @@ export function SystemStatusWidget({ service }: { service: ServiceItem }) {
           <h3>{service.name}</h3>
           {service.description && <p>{service.description}</p>}
         </div>
-        <button className="system-status-refresh" type="button" onClick={() => setRefreshIndex((value) => value + 1)} disabled={view.state === 'loading'}>
-          {view.state === 'loading' ? 'Loading…' : 'Refresh'}
+        <button className="system-status-refresh" type="button" onClick={() => setRefreshIndex((value) => value + 1)} disabled={refreshing}>
+          {refreshing ? 'Loading…' : 'Refresh'}
         </button>
       </header>
 
       {view.state === 'loading' && <p className="system-status-message" role="status">Loading system status…</p>}
       {view.state === 'error' && <p className="system-status-message" role="alert">System status is unavailable. Refresh to try again.</p>}
+      {view.state === 'loaded' && view.stale && <p className="system-status-message" role="status">The latest update failed; showing the previous reading.</p>}
       {view.state === 'loaded' && <>
         <div className="system-status-meters">
           <MetricMeter label="CPU" percent={view.status.cpu_percent} detail={`${view.status.logical_cores} logical cores`} />

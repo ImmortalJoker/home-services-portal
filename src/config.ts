@@ -1,5 +1,6 @@
 import { validateLaunch, type ServiceLaunch } from '../deploy/authentik/portal/launch.mjs';
 import { validateGuides, type ServiceGuides } from '../deploy/authentik/portal/guides.mjs';
+import { normalizeServiceUrl, validateOpdsUrl } from '../deploy/authentik/portal/urls.mjs';
 
 export interface ServiceItem {
   id: string;
@@ -48,23 +49,7 @@ export function validateConfig(value: unknown): PortalConfig {
     if (widget !== undefined && widget !== 'system-status') {
       throw new Error(`Service ${id} has an unsupported widget.`);
     }
-    let normalizedUrl: string;
-    if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('//') && !url.includes('\\')) {
-      const parsed = new URL(url, 'https://portal.invalid');
-      normalizedUrl = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    } else {
-      if (!nonEmptyString(url)) throw new Error(`Service ${id} needs a URL.`);
-      let parsed: URL;
-      try {
-        parsed = new URL(url);
-      } catch {
-        throw new Error(`Service ${id} URL must be absolute.`);
-      }
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        throw new Error(`Service ${id} URL must use HTTP or HTTPS.`);
-      }
-      normalizedUrl = parsed.href;
-    }
+    const normalizedUrl = normalizeServiceUrl(url, id);
     let normalizedGroups: string[] | undefined;
     if (accessGroups !== undefined) {
       if (!Array.isArray(accessGroups) || accessGroups.length === 0 || accessGroups.some((group) => !nonEmptyString(group))) {
@@ -74,13 +59,7 @@ export function validateConfig(value: unknown): PortalConfig {
     }
     const launch = validateLaunch(item.launch, id, normalizedUrl);
     const guides = validateGuides(item.guides);
-    let opdsUrl: string | undefined;
-    if (item.opdsUrl !== undefined) {
-      if (typeof item.opdsUrl !== 'string') throw new Error(`Service ${id} OPDS URL must use HTTPS.`);
-      const parsed = new URL(item.opdsUrl);
-      if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error(`Service ${id} OPDS URL must use credential-free HTTPS.`);
-      opdsUrl = parsed.href;
-    }
+    const opdsUrl = validateOpdsUrl(item.opdsUrl, id);
     return {
       id,
       name,

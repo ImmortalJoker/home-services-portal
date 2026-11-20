@@ -16,9 +16,9 @@ it('preselects the detected platform and lets the user see the other apps', () =
   expect(screen.getByRole('link', { name: 'AudioBooth' }).getAttribute('href')).toContain('apps.apple.com');
 });
 it('loads summary immediately and mounts the iframe only while expanded', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ active: 2, total: 4, percent: 75, download_bps: 1048576, upload_bps: 1024 }) }));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ downloading: 1, active: 2, total: 4, percent: 75, download_bps: 1048576, upload_bps: 1024 }) }));
   const { container } = render(<TransmissionCard service={{ id: 'transmission', name: 'Transmission', url: 'https://downloads.example.test/transmission/web/' }} />);
-  expect(await screen.findByText('2 running / 4 total')).toBeTruthy();
+  expect(await screen.findByText('1 downloading · 2 of 4 active')).toBeTruthy();
   expect(screen.getByText('75% overall')).toBeTruthy();
   expect(container.querySelector('iframe')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Web controls' }));
