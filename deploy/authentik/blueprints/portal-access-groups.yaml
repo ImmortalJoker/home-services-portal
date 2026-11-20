@@ -41,6 +41,9 @@ entries:
       name: Portal - Owner
     attrs:
       is_superuser: false
+      attributes:
+        portal_transmission_rpc_username: !Env PORTAL_TRANSMISSION_RPC_USERNAME
+        portal_transmission_rpc_password: !Env PORTAL_TRANSMISSION_RPC_PASSWORD
       roles:
         - !KeyOf portal-access-manager-role
   - model: authentik_core.group
@@ -396,7 +399,8 @@ entries:
       meta_description: Audiobook service behind the household portal access gate.
       policy_engine_mode: any
       open_in_new_tab: true
-      meta_hide: false
+      # Retired browser gateway; the private portal links directly to ABS/OIDC.
+      meta_hide: true
   - model: authentik_policies.policybinding
     conditions:
       - !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST
@@ -427,6 +431,254 @@ entries:
     identifiers:
       order: 2
       target: !KeyOf portal-audiobookshelf-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Owner]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_providers_oauth2.scopemapping
+    id: portal-audiobookshelf-profile
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_CLIENT_SECRET
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_WEB_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_MOBILE_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_LOGOUT_CALLBACK_URL
+    identifiers:
+      name: Portal Audiobookshelf OIDC Profile
+    attrs:
+      scope_name: profile
+      expression: |
+        preferred_username = ak_obj_attr(request.user, "audiobookshelf_username", request.user.username)
+        return {
+            "name": request.user.name,
+            "preferred_username": preferred_username,
+        }
+  - model: authentik_providers_oauth2.oauth2provider
+    id: portal-audiobookshelf-oidc-provider
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_CLIENT_SECRET
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_WEB_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_MOBILE_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_LOGOUT_CALLBACK_URL
+    identifiers:
+      name: Portal Audiobookshelf OIDC Provider
+    attrs:
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      client_type: confidential
+      client_id: audiobookshelf-oidc
+      client_secret: !Env PORTAL_AUDIOBOOKSHELF_OIDC_CLIENT_SECRET
+      redirect_uris:
+        - {matching_mode: strict, url: !Env PORTAL_AUDIOBOOKSHELF_OIDC_WEB_CALLBACK_URL, redirect_uri_type: authorization}
+        - {matching_mode: strict, url: !Env PORTAL_AUDIOBOOKSHELF_OIDC_MOBILE_CALLBACK_URL, redirect_uri_type: authorization}
+        - {matching_mode: strict, url: !Env PORTAL_AUDIOBOOKSHELF_OIDC_LOGOUT_CALLBACK_URL, redirect_uri_type: logout}
+      grant_types:
+        - authorization_code
+      issuer_mode: per_provider
+      sub_mode: hashed_user_id
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !KeyOf portal-audiobookshelf-profile
+  - model: authentik_core.application
+    id: portal-audiobookshelf-oidc-application
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_CLIENT_SECRET
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_WEB_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_MOBILE_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_LOGOUT_CALLBACK_URL
+    identifiers:
+      slug: portal-audiobookshelf-oidc
+    attrs:
+      name: Audiobookshelf OIDC Sign-in
+      provider: !KeyOf portal-audiobookshelf-oidc-provider
+      meta_description: Native Audiobookshelf sign-in for authorized household accounts.
+      policy_engine_mode: any
+      open_in_new_tab: true
+      meta_hide: true
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_CLIENT_SECRET
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_WEB_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_MOBILE_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_LOGOUT_CALLBACK_URL
+    identifiers:
+      order: 0
+      target: !KeyOf portal-audiobookshelf-oidc-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Public]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_CLIENT_SECRET
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_WEB_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_MOBILE_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_LOGOUT_CALLBACK_URL
+    identifiers:
+      order: 1
+      target: !KeyOf portal-audiobookshelf-oidc-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Family]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_CLIENT_SECRET
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_WEB_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_MOBILE_CALLBACK_URL
+      - !Env PORTAL_AUDIOBOOKSHELF_OIDC_LOGOUT_CALLBACK_URL
+    identifiers:
+      order: 2
+      target: !KeyOf portal-audiobookshelf-oidc-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Owner]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_providers_oauth2.scopemapping
+    id: portal-immich-profile
+    conditions:
+      - !Env PORTAL_IMMICH_OIDC_CLIENT_SECRET
+      - !Env PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL
+    identifiers:
+      name: Portal Immich Profile (No Email)
+    attrs:
+      scope_name: profile
+      expression: |
+        return {
+            "name": request.user.name,
+            "preferred_username": request.user.username,
+        }
+  - model: authentik_providers_oauth2.oauth2provider
+    id: portal-immich-oidc-provider
+    conditions:
+      - !Env PORTAL_IMMICH_OIDC_CLIENT_SECRET
+      - !Env PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL
+    identifiers:
+      name: Portal Immich OIDC Provider
+    attrs:
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      client_type: confidential
+      client_id: immich-oidc
+      client_secret: !Env PORTAL_IMMICH_OIDC_CLIENT_SECRET
+      redirect_uris: !If [
+        !Condition [AND, !Env PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL, !Env PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL, !Env PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL, !Env PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL],
+        [
+          {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+          {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL, redirect_uri_type: authorization},
+          {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+          {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL, redirect_uri_type: authorization},
+          {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL, redirect_uri_type: authorization},
+          {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+          {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL, redirect_uri_type: authorization},
+          {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+          {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL, redirect_uri_type: authorization}
+        ],
+        !If [
+          !Condition [AND, !Env PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL, !Env PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL],
+          [
+            {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+            {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL, redirect_uri_type: authorization},
+            {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+            {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL, redirect_uri_type: authorization},
+            {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL, redirect_uri_type: authorization},
+            {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+            {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL, redirect_uri_type: authorization}
+          ],
+          !If [
+            !Condition [AND, !Env PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL, !Env PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL],
+            [
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL, redirect_uri_type: authorization}
+            ],
+            [
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL, redirect_uri_type: authorization},
+              {matching_mode: strict, url: !Env PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL, redirect_uri_type: authorization}
+            ]
+          ]
+        ]
+      ]
+      grant_types:
+        - authorization_code
+      issuer_mode: per_provider
+      sub_mode: hashed_user_id
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !KeyOf portal-immich-profile
+  - model: authentik_core.application
+    id: portal-immich-oidc-application
+    conditions:
+      - !Env PORTAL_IMMICH_OIDC_CLIENT_SECRET
+      - !Env PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL
+    identifiers:
+      slug: portal-immich-oidc
+    attrs:
+      name: Immich OIDC Sign-in
+      provider: !KeyOf portal-immich-oidc-provider
+      meta_description: Subject-based Immich sign-in for Family and Owner; unlinked accounts require authenticated manual linking.
+      policy_engine_mode: any
+      open_in_new_tab: true
+      meta_hide: true
+  - model: authentik_policies.policybinding
+    id: portal-immich-family-binding
+    conditions:
+      - !Env PORTAL_IMMICH_OIDC_CLIENT_SECRET
+      - !Env PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL
+    identifiers:
+      order: 0
+      target: !KeyOf portal-immich-oidc-application
+    attrs:
+      group: !Find [authentik_core.group, [name, Portal - Family]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
+    id: portal-immich-owner-binding
+    conditions:
+      - !Env PORTAL_IMMICH_OIDC_CLIENT_SECRET
+      - !Env PORTAL_IMMICH_OIDC_WEB_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_WEB_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LOGIN_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_LAN_LINK_CALLBACK_URL
+      - !Env PORTAL_IMMICH_OIDC_MOBILE_CALLBACK_URL
+    identifiers:
+      order: 1
+      target: !KeyOf portal-immich-oidc-application
     attrs:
       group: !Find [authentik_core.group, [name, Portal - Owner]]
       enabled: true
@@ -491,198 +743,954 @@ entries:
       negate: false
       timeout: 30
       failure_result: false
-  - model: authentik_outposts.outpost
-    id: portal-test-outpost
+  - model: authentik_providers_oauth2.scopemapping
+    id: portal-transmission-host-header
     conditions:
-      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+      - !Env PORTAL_TRANSMISSION_EXTERNAL_HOST
     identifiers:
-      name: authentik Embedded Outpost
+      name: Portal Transmission Host Header
     attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-test-provider
-  - model: authentik_outposts.outpost
-    id: portal-books-outpost
+      scope_name: portal-transmission-host-header
+      expression: |
+        return {"ak_proxy": {"host_header": "127.0.0.1:9091"}}
+  - model: authentik_providers_proxy.proxyprovider
+    id: portal-transmission-provider
     conditions:
-      - !Condition [AND, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+      - !Env PORTAL_TRANSMISSION_EXTERNAL_HOST
     identifiers:
-      name: authentik Embedded Outpost
+      name: Portal Transmission Protected Service Provider
     attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-books-provider
-  - model: authentik_outposts.outpost
-    id: portal-both-outpost
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      internal_host: http://host.docker.internal:9091
+      external_host: !Env PORTAL_TRANSMISSION_EXTERNAL_HOST
+      internal_host_ssl_validation: false
+      mode: proxy
+      skip_path_regex: ""
+      basic_auth_enabled: true
+      basic_auth_user_attribute: portal_transmission_rpc_username
+      basic_auth_password_attribute: portal_transmission_rpc_password
+      intercept_header_auth: false
+      cookie_domain: ""
+      property_mappings:
+        - !KeyOf portal-transmission-host-header
+  - model: authentik_core.application
+    id: portal-transmission-application
     conditions:
-      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+      - !Env PORTAL_TRANSMISSION_EXTERNAL_HOST
     identifiers:
-      name: authentik Embedded Outpost
+      slug: portal-transmission
     attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-test-provider
-        - !KeyOf portal-books-provider
-  - model: authentik_outposts.outpost
-    id: portal-test-books-audiobookshelf-outpost
+      name: Transmission
+      provider: !KeyOf portal-transmission-provider
+      meta_launch_url: !Env PORTAL_TRANSMISSION_EXTERNAL_HOST
+      meta_description: Owner-only full-control torrent management.
+      policy_engine_mode: any
+      open_in_new_tab: true
+      meta_hide: false
+  - model: authentik_policies.policybinding
     conditions:
-      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+      - !Env PORTAL_TRANSMISSION_EXTERNAL_HOST
     identifiers:
-      name: authentik Embedded Outpost
+      order: 0
+      target: !KeyOf portal-transmission-application
     attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-test-provider
-        - !KeyOf portal-books-provider
-        - !KeyOf portal-audiobookshelf-provider
-  - model: authentik_outposts.outpost
-    id: portal-test-audiobookshelf-outpost
+      group: !Find [authentik_core.group, [name, Portal - Owner]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_providers_proxy.proxyprovider
+    id: portal-grocy-provider
     conditions:
-      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+      - !Env PORTAL_GROCY_EXTERNAL_HOST
     identifiers:
-      name: authentik Embedded Outpost
+      name: Portal Grocy Protected Service Provider
     attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-test-provider
-        - !KeyOf portal-audiobookshelf-provider
-  - model: authentik_outposts.outpost
-    id: portal-books-audiobookshelf-outpost
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      internal_host: !Env PORTAL_GROCY_INTERNAL_HOST
+      external_host: !Env PORTAL_GROCY_EXTERNAL_HOST
+      internal_host_ssl_validation: false
+      mode: proxy
+      # Must stay disabled until a separately validated, unbypassable API-key-only
+      # gateway strips identity headers. Outer Caddy scrubbing alone is insufficient.
+      skip_path_regex: ""
+      basic_auth_enabled: false
+      intercept_header_auth: false
+      cookie_domain: ""
+  - model: authentik_core.application
+    id: portal-grocy-application
     conditions:
-      - !Condition [AND, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+      - !Env PORTAL_GROCY_EXTERNAL_HOST
     identifiers:
-      name: authentik Embedded Outpost
+      slug: portal-grocy
     attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-books-provider
-        - !KeyOf portal-audiobookshelf-provider
-  - model: authentik_outposts.outpost
-    id: portal-audiobookshelf-outpost
+      name: Grocy
+      provider: !KeyOf portal-grocy-provider
+      meta_launch_url: !Env PORTAL_GROCY_EXTERNAL_HOST
+      meta_description: Household inventory and shopping-list service behind the portal access gate.
+      policy_engine_mode: any
+      open_in_new_tab: true
+      meta_hide: false
+  - model: authentik_policies.policybinding
     conditions:
-      - !Condition [AND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+      - !Env PORTAL_GROCY_EXTERNAL_HOST
     identifiers:
-      name: authentik Embedded Outpost
+      order: 0
+      target: !KeyOf portal-grocy-application
     attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-audiobookshelf-provider
-  - model: authentik_outposts.outpost
-    id: portal-metrics-outpost
+      group: !Find [authentik_core.group, [name, Portal - Family]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
+  - model: authentik_policies.policybinding
     conditions:
-      - !Condition [AND, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST]]
+      - !Env PORTAL_GROCY_EXTERNAL_HOST
     identifiers:
-      name: authentik Embedded Outpost
+      order: 1
+      target: !KeyOf portal-grocy-application
     attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-metrics-provider
-  - model: authentik_outposts.outpost
-    id: portal-test-metrics-outpost
-    conditions:
-      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST]]
-    identifiers:
-      name: authentik Embedded Outpost
-    attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-test-provider
-        - !KeyOf portal-metrics-provider
-  - model: authentik_outposts.outpost
-    id: portal-books-metrics-outpost
-    conditions:
-      - !Condition [AND, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST]]
-    identifiers:
-      name: authentik Embedded Outpost
-    attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-books-provider
-        - !KeyOf portal-metrics-provider
-  - model: authentik_outposts.outpost
-    id: portal-audiobookshelf-metrics-outpost
-    conditions:
-      - !Condition [AND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST]]
-    identifiers:
-      name: authentik Embedded Outpost
-    attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-audiobookshelf-provider
-        - !KeyOf portal-metrics-provider
-  - model: authentik_outposts.outpost
-    id: portal-test-books-metrics-outpost
-    conditions:
-      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST]]
-    identifiers:
-      name: authentik Embedded Outpost
-    attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-test-provider
-        - !KeyOf portal-books-provider
-        - !KeyOf portal-metrics-provider
-  - model: authentik_outposts.outpost
-    id: portal-test-audiobookshelf-metrics-outpost
-    conditions:
-      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST]]
-    identifiers:
-      name: authentik Embedded Outpost
-    attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-test-provider
-        - !KeyOf portal-audiobookshelf-provider
-        - !KeyOf portal-metrics-provider
-  - model: authentik_outposts.outpost
-    id: portal-books-audiobookshelf-metrics-outpost
-    conditions:
-      - !Condition [AND, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST]]
-    identifiers:
-      name: authentik Embedded Outpost
-    attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-books-provider
-        - !KeyOf portal-audiobookshelf-provider
-        - !KeyOf portal-metrics-provider
-  - model: authentik_outposts.outpost
-    id: portal-test-books-audiobookshelf-metrics-outpost
-    conditions:
-      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST]
-    identifiers:
-      name: authentik Embedded Outpost
-    attrs:
-      name: authentik Embedded Outpost
-      type: proxy
-      providers:
-        - !KeyOf portal-test-provider
-        - !KeyOf portal-books-provider
-        - !KeyOf portal-audiobookshelf-provider
-        - !KeyOf portal-metrics-provider
+      group: !Find [authentik_core.group, [name, Portal - Owner]]
+      enabled: true
+      negate: false
+      timeout: 30
+      failure_result: false
   - model: authentik_outposts.outpost
     id: portal-empty-outpost
     conditions:
-      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST]]
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
     identifiers:
       name: authentik Embedded Outpost
     attrs:
       name: authentik Embedded Outpost
       type: proxy
       providers: []
+  - model: authentik_outposts.outpost
+    id: portal-empty-outpost-transmission
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-outpost-transmission
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-outpost
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-outpost-transmission
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-both-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+  - model: authentik_outposts.outpost
+    id: portal-both-outpost-transmission
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-outpost
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-outpost-transmission
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-outpost-transmission
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-outpost
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-outpost-transmission
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-outpost-transmission
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-metrics-outpost
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-metrics-outpost-transmission
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-metrics-outpost-transmission
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-metrics-outpost
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-metrics-outpost-transmission
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-metrics-outpost-transmission
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-metrics-outpost
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-metrics-outpost-transmission
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-metrics-outpost-transmission
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-metrics-outpost
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-metrics-outpost-transmission
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-metrics-outpost
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-metrics-outpost-transmission
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_GROCY_EXTERNAL_HOST]]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+  - model: authentik_outposts.outpost
+    id: portal-empty-outpost-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-empty-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-outpost-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-outpost-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-both-outpost-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-both-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-outpost-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-outpost-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-outpost-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-outpost-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_METRICS_EXTERNAL_HOST], !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-metrics-outpost-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-metrics-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-metrics-outpost-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-metrics-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-metrics-outpost-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-metrics-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-metrics-outpost-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-metrics-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST], !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-metrics-outpost-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-audiobookshelf-metrics-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-metrics-outpost-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-audiobookshelf-metrics-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_BOOKS_EXTERNAL_HOST], !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-metrics-outpost-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-books-audiobookshelf-metrics-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Condition [NAND, !Env PORTAL_TEST_EXTERNAL_HOST], !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-metrics-outpost-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Condition [NAND, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST], !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-grocy-provider
+  - model: authentik_outposts.outpost
+    id: portal-test-books-audiobookshelf-metrics-outpost-transmission-grocy
+    conditions:
+      - !Condition [AND, !Env PORTAL_TEST_EXTERNAL_HOST, !Env PORTAL_BOOKS_EXTERNAL_HOST, !Env PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST, !Env PORTAL_METRICS_EXTERNAL_HOST, !Env PORTAL_TRANSMISSION_EXTERNAL_HOST, !Env PORTAL_GROCY_EXTERNAL_HOST]
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      name: authentik Embedded Outpost
+      type: proxy
+      providers:
+        - !KeyOf portal-test-provider
+        - !KeyOf portal-books-provider
+        - !KeyOf portal-audiobookshelf-provider
+        - !KeyOf portal-metrics-provider
+        - !KeyOf portal-transmission-provider
+        - !KeyOf portal-grocy-provider
   - model: authentik_policies.policybinding
     conditions:
       - !Env PORTAL_TEST_EXTERNAL_HOST
@@ -738,3 +1746,4 @@ entries:
       domain: authentik-default
     attrs:
       default_application: !KeyOf portal-test-application
+      flow_user_switch: !Find [authentik_flows.flow, [slug, default-authentication-flow]]

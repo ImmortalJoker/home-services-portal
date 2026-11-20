@@ -8,6 +8,7 @@ import { validateLaunch } from './launch.mjs';
 import { normalizeServiceUrl, validateOpdsUrl } from './urls.mjs';
 import { requestTransmissionSummary } from './transmission.mjs';
 import { validateGuides } from './guides.mjs';
+import { isTrustedProxy, resolveProxyAddresses } from './peer-trust.mjs';
 
 const PUBLIC_GROUP = 'Portal - Public';
 const FAMILY_GROUP = 'Portal - Family';
@@ -113,7 +114,8 @@ function decodeUtf8HeaderFromLatin1(value) {
   return decoded.includes(String.fromCodePoint(0xfffd)) ? value : decoded;
 }
 
-function getIdentity(request) {
+function getIdentity(request, trustedProxyAddresses) {
+  if (!isTrustedProxy(request.socket.remoteAddress, trustedProxyAddresses)) return { status: 401 };
   const username = request.headers['x-authentik-username'];
   if (typeof username !== 'string' || !username.trim()) return { status: 401 };
   const groups = parseAuthentikGroups(request.headers['x-authentik-groups']);
@@ -233,6 +235,8 @@ async function serveStatic(request, response, pathname, distDir) {
 }
 
 export function createPortalServer({
+  trustedProxyAddresses = [],
+  resolveTrustedProxyAddresses,
   config,
   distDir,
   statusUpstreamUrl = process.env.PORTAL_STATUS_UPSTREAM_URL ?? '',
@@ -279,7 +283,12 @@ export function createPortalServer({
   const staticDir = resolve(distDir ?? process.env.PORTAL_DIST_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../../dist'));
   return createServer(async (request, response) => {
     setSecurityHeaders(response);
-    if (frameOrigin && getIdentity(request).identity?.role === 'Owner') response.setHeader('Content-Security-Policy', response.getHeader('Content-Security-Policy') + `; frame-src ${frameOrigin}`);
+    let trusted = trustedProxyAddresses;
+    if (resolveTrustedProxyAddresses) {
+      try { trusted = await resolveTrustedProxyAddresses(); } catch { trusted = []; }
+    }
+    const auth = getIdentity(request, Array.isArray(trusted) ? trusted : []);
+    if (frameOrigin && auth.identity?.role === 'Owner') response.setHeader('Content-Security-Policy', response.getHeader('Content-Security-Policy') + `; frame-src ${frameOrigin}`);
     const method = request.method ?? 'GET';
     if (method !== 'GET' && method !== 'HEAD') {
       response.setHeader('Allow', 'GET, HEAD');
@@ -305,7 +314,6 @@ export function createPortalServer({
     if (routePath.length > 1) routePath = routePath.replace(/\/+$/, '');
 
     if (routePath === '/api/session') {
-      const auth = getIdentity(request);
       if (auth.status !== 200) {
         sendJson(response, auth.status, { error: auth.status === 401 ? 'Authentication required.' : 'Portal access denied.' }, method);
         return;
@@ -319,7 +327,6 @@ export function createPortalServer({
     }
 
     if (routePath === '/api/system-status') {
-      const auth = getIdentity(request);
       if (auth.status !== 200) {
         sendJson(response, auth.status, { error: auth.status === 401 ? 'Authentication required.' : 'Portal access denied.' }, method);
         return;
@@ -353,7 +360,6 @@ export function createPortalServer({
     }
 
     if (routePath === '/api/transmission-status') {
-      const auth = getIdentity(request);
       if (auth.status !== 200) { sendJson(response, auth.status, { error: 'Authentication required.' }, method); return; }
       if (auth.identity.role !== 'Owner' || !transmissionService) { sendJson(response, 403, { error: 'Owner access required.' }, method); return; }
       try {
@@ -367,7 +373,6 @@ export function createPortalServer({
     }
 
     if (routePath === '/owner-check' || routePath === '/family-check' || routePath === '/sample') {
-      const auth = getIdentity(request);
       if (auth.status !== 200) {
         sendText(response, auth.status, auth.status === 401 ? 'Authentication required.' : 'Portal access denied.', method);
         return;
@@ -406,6 +411,10 @@ if (process.argv[1] && resolve(process.argv[1]) === thisFile) {
   const config = await loadConfig(configPath);
   const port = Number(process.env.PORT ?? 8080);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be a valid TCP port.');
-  const server = createPortalServer({ config });
-  server.listen(port, '0.0.0.0', () => console.log(`Portal listening on internal port ${port}.`));
+  const bindHost = process.env.PORTAL_BIND_HOST;
+  const proxyHost = process.env.PORTAL_TRUSTED_PROXY_HOST;
+  if (!bindHost || !proxyHost || ['0.0.0.0', '::'].includes(bindHost)) throw new Error('Private portal bind and trusted proxy hosts must be configured.');
+  if (!(await resolveProxyAddresses(proxyHost)).length) throw new Error('Trusted portal proxy is unavailable.');
+  const server = createPortalServer({ config, resolveTrustedProxyAddresses: () => resolveProxyAddresses(proxyHost) });
+  server.listen(port, bindHost, () => console.log(`Portal listening on private interface, port ${port}.`));
 }

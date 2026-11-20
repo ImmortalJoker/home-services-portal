@@ -15,7 +15,7 @@ it('computes weighted completion, downloading and active counts without returnin
 });
 it('exposes only aggregate fields to Owners and never contacts RPC for other roles', async () => {
   let calls = 0;
-  const server = createPortalServer({ config: { portalName: 'Test', services: [{ id: 'transmission', name: 'Transmission', url: 'https://downloads.example.test/transmission/web/', accessGroups: ['Portal - Owner'] }] }, distDir: new URL('../dist/', import.meta.url).pathname,
+  const server = createPortalServer({ trustedProxyAddresses: ['127.0.0.1'], config: { portalName: 'Test', services: [{ id: 'transmission', name: 'Transmission', url: 'https://downloads.example.test/transmission/web/', accessGroups: ['Portal - Owner'] }] }, distDir: new URL('../dist/', import.meta.url).pathname,
     transmissionRequester: async () => { calls++; return { downloading: 1, active: 1, total: 2, percent: 20, download_bps: 1000, upload_bps: 20, names: ['must-not-leak'] }; } });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -36,7 +36,7 @@ it('exposes only aggregate fields to Owners and never contacts RPC for other rol
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
 it('rejects a Transmission service configured for household access', () => {
-  assert.throws(() => createPortalServer({ config: { portalName: 'Test', services: [{ id: 'transmission', name: 'Transmission', url: 'https://downloads.example.test/', accessGroups: ['Portal - Public'] }] } }));
+  assert.throws(() => createPortalServer({ trustedProxyAddresses: ['127.0.0.1'], config: { portalName: 'Test', services: [{ id: 'transmission', name: 'Transmission', url: 'https://downloads.example.test/', accessGroups: ['Portal - Public'] }] } }));
 });
 it('requestJson sends the caller-supplied Host header and caps the response body', async () => {
   const { createServer } = await import('node:http');

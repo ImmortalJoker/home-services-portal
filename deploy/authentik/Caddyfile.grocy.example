@@ -1,0 +1,27 @@
+# Defense in depth only: does not isolate Grocy or protect direct outpost access.
+# Keep API skip disabled; use compose.grocy.yml for the private upstream boundary.
+# Import into the host Caddyfile. Values are public demo placeholders.
+# Set GROCY_PUBLIC_AUTHORITY to the authority (host[:port], no scheme/path)
+# of PORTAL_GROCY_EXTERNAL_HOST. Both ingress paths use this canonical origin.
+(grocy_outpost) {
+	reverse_proxy {$GROCY_OUTPOST_UPSTREAM:127.0.0.1:9000} {
+		# Strip client identity BEFORE the outpost, including skipped API requests.
+		header_up -X-Authentik-*
+		header_up Host {$GROCY_PUBLIC_AUTHORITY:grocy.example.test}
+		header_up X-Forwarded-Host {$GROCY_PUBLIC_AUTHORITY:grocy.example.test}
+		header_up X-Forwarded-Proto https
+	}
+}
+
+# LAN HTTPS: configure DNS and a trusted certificate for the chosen name.
+{$GROCY_LAN_ADDRESS:https://grocy.example.test} {
+	import grocy_outpost
+}
+
+# Tailnet Serve terminates TLS and forwards ONLY to this loopback listener.
+# bind keeps the listener on loopback while accepting the public Serve Host.
+# Never remove bind or target the outpost directly.
+{$GROCY_SERVE_ADDRESS:http://:9080} {
+	bind 127.0.0.1
+	import grocy_outpost
+}

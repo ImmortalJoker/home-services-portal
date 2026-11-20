@@ -18,6 +18,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc -p tsconfig.json
+      - name: Install Caddy for isolated Grocy proxy regression tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gpg
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+          sudo apt-get update
+          sudo apt-get install -y caddy
+          sudo systemctl stop caddy
+      - run: npm run test:grocy-proxy-config
+      - run: npm run test:grocy-proxy
       - run: npm test
       - name: Verify authenticated portal bundle
         env:
@@ -27,6 +38,8 @@ jobs:
       - run: npm run test:portal-server
       - name: Verify Authentik Compose security boundaries
         run: npm run test:authentik-compose
+      - name: Verify portal proxy peer isolation with disposable containers
+        run: npm run test:portal-network
       - name: Build public Pages demo
         env:
           VITE_PORTAL_PUBLIC_DEMO: 'true'

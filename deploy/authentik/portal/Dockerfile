@@ -21,6 +21,7 @@ COPY --chown=node:node deploy/authentik/portal/transmission.mjs ./transmission.m
 COPY --chown=node:node deploy/authentik/portal/guides.mjs ./guides.mjs
 COPY --chown=node:node deploy/authentik/portal/urls.mjs ./urls.mjs
 COPY --chown=node:node deploy/authentik/portal/http.mjs ./http.mjs
+COPY --chown=node:node deploy/authentik/portal/peer-trust.mjs ./peer-trust.mjs
 USER node
 EXPOSE 8080
 CMD ["node", "server.mjs"]
