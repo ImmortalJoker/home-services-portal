@@ -11,7 +11,7 @@ const config = {
 };
 let server, base;
 before(async () => {
-  server = createPortalServer({ config, distDir: new URL('../dist/', import.meta.url).pathname });
+  server = createPortalServer({ trustedProxyAddresses: ['127.0.0.1'], config, distDir: new URL('../dist/', import.meta.url).pathname });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
 });

@@ -33,7 +33,7 @@ let statusFetchCalls = 0;
 let requestedStatusHost;
 
 before(async () => {
-  server = createPortalServer({
+  server = createPortalServer({ trustedProxyAddresses: ['127.0.0.1'],
     config,
     distDir: new URL('../dist/', import.meta.url).pathname,
     statusUpstreamUrl: 'http://metrics.internal/api/status',

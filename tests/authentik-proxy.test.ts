@@ -361,13 +361,12 @@ describe('protected Authentik portal demo', () => {
     expect(provider?.attrs?.grant_types).toEqual(['authorization_code']);
     expect(provider?.attrs?.property_mappings).toEqual([
       ['authentik_providers_oauth2.scopemapping', ['scope_name', 'openid']],
-      ['authentik_providers_oauth2.scopemapping', ['scope_name', 'email']],
       'portal-immich-profile',
     ]);
     expect(mapping?.attrs?.scope_name).toBe('profile');
     expect(mapping?.attrs?.expression).not.toContain('email');
     expect(mapping?.attrs?.expression).not.toContain('immich_role');
-    expect(application?.attrs?.meta_description).toContain('Email-based auto-registration');
+    expect(application?.attrs?.meta_description).toContain('authenticated manual linking');
     expect(application?.identifiers?.slug).toBe('portal-immich-oidc');
     expect(application?.attrs?.provider).toBe('portal-immich-oidc-provider');
     expect(bindings.map(binding => policyGroupName(binding))).toEqual(['Portal - Family', 'Portal - Owner']);

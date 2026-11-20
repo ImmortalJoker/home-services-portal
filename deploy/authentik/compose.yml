@@ -26,6 +26,8 @@ services:
       NODE_ENV: production
       PORTAL_CONFIG_PATH: /app/config/portal-services.json
       PORTAL_DIST_DIR: /app/dist
+      PORTAL_BIND_HOST: portal-backend
+      PORTAL_TRUSTED_PROXY_HOST: portal-auth-proxy
       PORTAL_STATUS_UPSTREAM_URL: ${PORTAL_STATUS_UPSTREAM_URL:-}
       PORTAL_STATUS_EXTERNAL_URL: ${PORTAL_METRICS_EXTERNAL_HOST:-}
       PORTAL_TRANSMISSION_RPC_USERNAME: ${PORTAL_TRANSMISSION_RPC_USERNAME:-}
@@ -37,10 +39,15 @@ services:
       - ALL
     expose:
       - "8080"
+    networks:
+      portal_private:
+        aliases:
+          - portal-backend
+      portal_egress: {}
     volumes:
       - ${PORTAL_CONFIG_FILE:-./portal-services.json.example}:/app/config/portal-services.json:ro
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://portal-backend:8080/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -62,6 +69,11 @@ services:
     ports:
       - "127.0.0.1:9000:9000"
     shm_size: 512mb
+    networks:
+      default: {}
+      portal_private:
+        aliases:
+          - portal-auth-proxy
     volumes:
       - ./data:/data
       - ./custom-templates:/templates
@@ -110,6 +122,12 @@ services:
       - ./certs:/certs
       - ./custom-templates:/templates
       - ./blueprints/portal-access-groups.yaml:/blueprints/portal-access-groups.yaml:ro
+
+networks:
+  portal_private:
+    internal: true
+  # Outbound-only membership: no other service joins, and the app does not bind this interface.
+  portal_egress: {}
 
 volumes:
   database:

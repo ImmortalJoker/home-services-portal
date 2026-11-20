@@ -630,7 +630,6 @@ entries:
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
-        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
         - !KeyOf portal-immich-profile
   - model: authentik_core.application
     id: portal-immich-oidc-application
@@ -646,7 +645,7 @@ entries:
     attrs:
       name: Immich OIDC Sign-in
       provider: !KeyOf portal-immich-oidc-provider
-      meta_description: Email-based auto-registration for Immich Family and Owner accounts.
+      meta_description: Subject-based Immich sign-in for Family and Owner; unlinked accounts require authenticated manual linking.
       policy_engine_mode: any
       open_in_new_tab: true
       meta_hide: true
