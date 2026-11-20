@@ -2,6 +2,34 @@
 
 This Compose project starts an isolated authentik identity provider for development. The web port is bound to `127.0.0.1:9000` only; Compose does not publish it on the LAN or tailnet, and no existing service is placed behind it. A separate Tailscale Serve configuration may expose it privately on a specific machine; review that machine's Serve status and tailnet policy independently. This scaffold is not an authorization boundary until an application/provider is configured and direct service routes are protected.
 
+## Portal live panels and app recommendations
+
+The private portal shows the existing Owner-only Mac status panel above the service tiles, with a 15-second refresh while visible. Transmission's Owner-only tile shows running/total counts, byte-weighted completion, and download/upload rates; its expansion button mounts the existing protected HTTPS web UI in a sandboxed iframe and removes it on collapse. First-time sign-in may require opening the full-page link before reloading the panel. Portal CSP permits framing only that configured HTTPS origin, and only on Owner responses.
+
+`GET /api/transmission-status` checks the verified portal identity before contacting RPC and returns only numeric aggregates, never torrent names, paths, credentials or session headers. The backend uses the existing `PORTAL_TRANSMISSION_RPC_USERNAME`/`PORTAL_TRANSMISSION_RPC_PASSWORD` environment references; do not place those values in frontend config. No raw RPC or control proxy is added. Anonymous gets 401; Public, Family and Pending get 403. Status responses are `no-store`.
+
+App recommendations and setup instructions are configured in each private service entry's optional `guides` field. The backend validates these fields and returns them only after the parent service's existing group filtering. Public users therefore receive only their service guides, Family also receives household guides, and Owner also receives system and Transmission guides. Pending receives none. The iPhone/iPad–Android switch defaults to detected platform and affects guides only; it does not change app-launch links or permissions. Download links use `noreferrer`; copyable service addresses remain separate from external links.
+
+Example service field (illustrative public address):
+
+```json
+"guides": {
+  "ios": {
+    "title": "AudioBooth",
+    "downloadUrl": "https://apps.apple.com/app/id6753017503",
+    "connectionLabel": "Server address",
+    "connectionUrl": "https://audio.example.test:8448/",
+    "steps": ["Add a server with the address below.", "Choose SSO and complete sign-in."]
+  }
+}
+```
+
+Supported platform keys are `ios` and `android`. Each guide requires `title` and a nonempty `steps` list; `downloadUrl`, `connectionUrl` and `connectionLabel` are optional. URLs must be credential-free HTTPS. Unknown fields are rejected. Keep credentials, API keys and tokens out of all guide text and URLs. Set the guide's connection address deliberately: Books uses its OPDS URL; native Audiobookshelf uses the unified `:8448` address. To apply metadata-only changes, validate the config and recreate only `portal-test`; no frontend rebuild is needed.
+
+The compact header's route indicator reads the edge-generated `X-Portal-Connection` response header on the session request: green for `local`, blue for `tailscale`, neutral if unavailable. It reports the path used to load the portal, not whether a VPN app is installed, and is not an authorization signal. The LAN Caddy path stamps `local`; the tailnet portal/auth Serve routes use a loopback-only Caddy relay on `9082`, which stamps `tailscale`, preserves the public Host and original forwarded-for metadata, and forwards HTTPS scheme metadata to the same existing Authentik upstream. Other service routes and tailnet access policy remain unchanged.
+
+After a build, `npm run test:portal-server` includes owner-gating, aggregate privacy and offline-worker tests. These same-host checks do not replace a real authenticated device iframe/login test.
+
 ## Start
 
 From the repository root:

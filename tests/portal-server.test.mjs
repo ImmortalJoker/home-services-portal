@@ -184,4 +184,33 @@ describe('Authenticated portal service', () => {
     assert.equal((await session('Unrelated Group')).status, 403);
     assert.equal((await session(undefined)).status, 403);
   });
+
+  it('serves install metadata and the Apple touch icon with install-compatible content types', async () => {
+    const htmlResponse = await fetch(`${baseUrl}/`);
+    assert.equal(htmlResponse.status, 200);
+    const html = await htmlResponse.text();
+    assert.match(html, /rel="manifest"/);
+    assert.match(html, /rel="manifest"[^>]*crossorigin="use-credentials"/);
+    assert.match(html, /apple-mobile-web-app-capable/);
+
+    const manifestResponse = await fetch(`${baseUrl}/manifest.webmanifest`);
+    assert.equal(manifestResponse.status, 200);
+    assert.ok((manifestResponse.headers.get('content-type') ?? '').startsWith('application/manifest+json'));
+    const manifest = await manifestResponse.json();
+    assert.equal(manifest.display, 'standalone');
+    assert.equal(manifest.start_url, './');
+    assert.equal(manifest.name, 'Home Services Portal');
+    assert.ok(manifest.icons.some(({ sizes }) => sizes === '192x192'));
+    assert.ok(manifest.icons.some(({ sizes }) => sizes === '512x512'));
+    assert.ok(manifest.icons.some(({ purpose }) => purpose.includes('maskable')));
+
+    const iconResponse = await fetch(`${baseUrl}/apple-touch-icon.png`);
+    assert.equal(iconResponse.status, 200);
+    assert.ok((iconResponse.headers.get('content-type') ?? '').startsWith('image/png'));
+    const iconBytes = Buffer.from(await iconResponse.arrayBuffer());
+    assert.deepEqual([...iconBytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    const worker = await fetch(`${baseUrl}/sw.js`);
+    assert.equal(worker.status, 200);
+    assert.match(worker.headers.get('content-type'), /javascript/);
+  });
 });

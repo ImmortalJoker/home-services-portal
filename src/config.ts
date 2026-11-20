@@ -1,3 +1,6 @@
+import { validateLaunch, type ServiceLaunch } from '../deploy/authentik/portal/launch.mjs';
+import { validateGuides, type ServiceGuides } from '../deploy/authentik/portal/guides.mjs';
+
 export interface ServiceItem {
   id: string;
   name: string;
@@ -6,6 +9,9 @@ export interface ServiceItem {
   category?: string;
   accessGroups?: string[];
   widget?: 'system-status';
+  launch?: ServiceLaunch;
+  opdsUrl?: string;
+  guides?: ServiceGuides;
 }
 
 export interface PortalConfig {
@@ -66,6 +72,15 @@ export function validateConfig(value: unknown): PortalConfig {
       }
       normalizedGroups = [...new Set(accessGroups.map((group) => group.trim()))];
     }
+    const launch = validateLaunch(item.launch, id, normalizedUrl);
+    const guides = validateGuides(item.guides);
+    let opdsUrl: string | undefined;
+    if (item.opdsUrl !== undefined) {
+      if (typeof item.opdsUrl !== 'string') throw new Error(`Service ${id} OPDS URL must use HTTPS.`);
+      const parsed = new URL(item.opdsUrl);
+      if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error(`Service ${id} OPDS URL must use credential-free HTTPS.`);
+      opdsUrl = parsed.href;
+    }
     return {
       id,
       name,
@@ -74,6 +89,9 @@ export function validateConfig(value: unknown): PortalConfig {
       category,
       ...(normalizedGroups ? { accessGroups: normalizedGroups } : {}),
       ...(widget ? { widget } : {}),
+      ...(launch ? { launch } : {}),
+      ...(guides ? { guides } : {}),
+      ...(opdsUrl ? { opdsUrl } : {}),
     };
   });
 

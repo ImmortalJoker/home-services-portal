@@ -14,19 +14,28 @@ const config: PortalConfig = {
 };
 
 describe('Portal', () => {
-  it('renders the configured title and groups', () => {
+  it('renders a flat tile grid without category headings', () => {
     render(<Portal config={config} />);
     expect(screen.getByRole('heading', { name: 'My Services' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Reading' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Entertainment' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Services' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Reading' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Entertainment' })).toBeNull();
   });
 
   it('renders service links with safe external-link attributes', () => {
     render(<Portal config={config} />);
-    const link = screen.getByRole('link', { name: /BooksRead books/ });
+    const link = screen.getByRole('link', { name: 'Open Books' });
     expect(link.getAttribute('href')).toBe('http://books.local');
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toBe('noreferrer');
+  });
+
+  it('keeps the OPDS link inside the Books tile without nested anchors', () => {
+    const { container } = render(<Portal config={{ portalName: 'Test', services: [{ id: 'books-library', name: 'Books', url: 'https://books.example.test/', opdsUrl: 'https://books.example.test:8452/opds' }] }} />);
+    const opds = screen.getByRole('link', { name: 'Open Books OPDS' });
+    expect(opds.closest('article')?.getAttribute('aria-label')).toBe('Books');
+    expect(opds.getAttribute('href')).toBe('https://books.example.test:8452/opds');
+    expect(container.querySelector('a a')).toBeNull();
   });
 
   it('renders an empty state when no services are configured', () => {

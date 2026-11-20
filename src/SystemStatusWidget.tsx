@@ -97,9 +97,14 @@ export function SystemStatusWidget({ service }: { service: ServiceItem }) {
     }
 
     void load();
+    const interval = window.setInterval(() => { if (!document.hidden) void load(); }, 15000);
+    const visible = () => { if (!document.hidden) void load(); };
+    document.addEventListener('visibilitychange', visible);
     return () => {
       active = false;
       controller.abort();
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', visible);
     };
   }, [refreshIndex]);
 
