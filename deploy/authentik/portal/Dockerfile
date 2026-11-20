@@ -7,6 +7,7 @@ COPY src ./src
 COPY public ./public
 COPY deploy/authentik/portal/launch.mjs ./deploy/authentik/portal/launch.mjs
 COPY deploy/authentik/portal/guides.mjs ./deploy/authentik/portal/guides.mjs
+COPY deploy/authentik/portal/urls.mjs ./deploy/authentik/portal/urls.mjs
 ENV VITE_BASE_PATH=/ VITE_PORTAL_PUBLIC_DEMO=false
 RUN npm run build
 
@@ -18,6 +19,8 @@ COPY --chown=node:node deploy/authentik/portal/server.mjs ./server.mjs
 COPY --chown=node:node deploy/authentik/portal/launch.mjs ./launch.mjs
 COPY --chown=node:node deploy/authentik/portal/transmission.mjs ./transmission.mjs
 COPY --chown=node:node deploy/authentik/portal/guides.mjs ./guides.mjs
+COPY --chown=node:node deploy/authentik/portal/urls.mjs ./urls.mjs
+COPY --chown=node:node deploy/authentik/portal/http.mjs ./http.mjs
 USER node
 EXPOSE 8080
 CMD ["node", "server.mjs"]

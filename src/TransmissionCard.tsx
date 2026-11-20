@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ServiceItem } from './config';
 import { ServiceIcon } from './ServiceIcon';
 
-interface Summary { active: number; total: number; percent: number | null; download_bps: number; upload_bps: number }
+interface Summary { downloading: number; active: number; total: number; percent: number | null; download_bps: number; upload_bps: number }
 function speed(bytes: number) { return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB/s` : `${Math.round(bytes / 1024)} KB/s`; }
 export function TransmissionCard({ service }: { service: ServiceItem }) {
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -17,8 +17,9 @@ export function TransmissionCard({ service }: { service: ServiceItem }) {
         const r = await fetch(`${import.meta.env.BASE_URL}api/transmission-status`, { cache: 'no-store', signal: controller.signal });
         if (!r.ok) throw new Error('Unavailable');
         const d = await r.json();
-        if (!['active', 'total', 'download_bps', 'upload_bps'].every(k => Number.isFinite(d[k]) && d[k] >= 0) ||
-            !(d.percent === null || Number.isFinite(d.percent) && d.percent >= 0 && d.percent <= 100) || d.active > d.total) throw new Error('Invalid summary');
+        if (!['downloading', 'active', 'total', 'download_bps', 'upload_bps'].every(k => Number.isFinite(d[k]) && d[k] >= 0) ||
+            !(d.percent === null || Number.isFinite(d.percent) && d.percent >= 0 && d.percent <= 100) ||
+            d.downloading > d.active || d.active > d.total) throw new Error('Invalid summary');
         if (active) { setSummary(d); setFailed(false); }
       } catch { if (active) { setSummary(null); setFailed(true); } }
     };
@@ -33,7 +34,7 @@ export function TransmissionCard({ service }: { service: ServiceItem }) {
       <span className="card-mark mark-2"><ServiceIcon id="transmission" name={service.name} /></span><span className="card-copy"><strong>{service.name}</strong></span>
     </a>
     <div className="transmission-stats" aria-live="polite">{summary ? <>
-      <span>{summary.active} running / {summary.total} total</span>
+      <span>{summary.downloading} downloading · {summary.active} of {summary.total} active</span>
       <strong>{summary.percent === null ? 'No torrents' : `${Math.round(summary.percent)}% overall`}</strong>
       <span className="transmission-speeds">↓ {speed(summary.download_bps)} · ↑ {speed(summary.upload_bps)}</span>
     </> : <span>{failed ? 'Status unavailable' : 'Loading status…'}</span>}</div>

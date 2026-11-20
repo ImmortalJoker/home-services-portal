@@ -35,17 +35,16 @@ export function detectMobilePlatform(device) {
   return null;
 }
 
+// `service` has already passed validateLaunch (via validateConfig / validatePortalConfig).
+// The href is built only from the fixed preset table, so a lookup is enough here.
 export function getAppLaunch(service, platform) {
-  if (!platform || !service.launch) return null;
-  try {
-    const launch = validateLaunch(service.launch, service.id, service.url);
-    const client = launch[platform];
-    if (!client) return null;
-    const preset = clients[client];
-    const href = platform === 'ios' ? preset.ios :
-      `intent://#Intent;scheme=${preset.scheme};package=${preset.package};S.browser_fallback_url=${encodeURIComponent(service.url)};end`;
-    return { href, label: preset.label };
-  } catch {
-    return null;
-  }
+  const client = platform && service.launch ? service.launch[platform] : undefined;
+  const preset = typeof client === 'string' && Object.hasOwn(clients, client) ? clients[client] : null;
+  if (!preset || preset.service !== service.id) return null;
+  if (platform === 'ios') return preset.ios ? { href: preset.ios, label: preset.label } : null;
+  if (!preset.package) return null;
+  return {
+    href: `intent://#Intent;scheme=${preset.scheme};package=${preset.package};S.browser_fallback_url=${encodeURIComponent(service.url)};end`,
+    label: preset.label,
+  };
 }

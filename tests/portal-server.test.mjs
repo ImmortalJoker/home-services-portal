@@ -213,4 +213,12 @@ describe('Authenticated portal service', () => {
     assert.equal(worker.status, 200);
     assert.match(worker.headers.get('content-type'), /javascript/);
   });
+
+  it('allows only same-origin styles and fonts so the portal never contacts a font CDN', async () => {
+    const response = await fetch(`${baseUrl}/`);
+    const csp = response.headers.get('content-security-policy');
+    assert.match(csp, /style-src 'self';/);
+    assert.match(csp, /font-src 'self';/);
+    assert.doesNotMatch(csp, /https?:\/\//);
+  });
 });

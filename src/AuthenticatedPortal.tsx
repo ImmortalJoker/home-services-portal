@@ -14,6 +14,7 @@ interface PortalIdentity {
 type PortalView =
   | { state: 'loading' }
   | { state: 'authenticated'; config: PortalConfig; identity: PortalIdentity; connection: 'local' | 'tailscale' | 'unknown' }
+  | { state: 'expired' }
   | { state: 'denied' }
   | { state: 'error' };
 
@@ -46,10 +47,17 @@ export function AuthenticatedPortal() {
         const response = await fetch(apiUrl, {
           headers: { Accept: 'application/json' },
           cache: 'no-store',
+          // An expired Authentik session answers with a cross-origin redirect to sign-in.
+          // Following it would fail on CORS and look like a server error.
+          redirect: 'manual',
         });
         if (!active) return;
 
-        if (response.status === 401 || response.status === 403) {
+        if (response.type === 'opaqueredirect' || response.status === 401) {
+          setView({ state: 'expired' });
+          return;
+        }
+        if (response.status === 403) {
           setView({ state: 'denied' });
           return;
         }
@@ -77,6 +85,14 @@ export function AuthenticatedPortal() {
 
   if (view.state === 'loading') {
     return <main className="shell auth-state" role="status">Loading your portal…</main>;
+  }
+  if (view.state === 'expired') {
+    // A full-page navigation lets Authentik run its sign-in flow and return here.
+    return <main className="shell auth-state" role="alert">
+      <h1>Your session has ended</h1>
+      <p>Sign in again to continue to your household services.</p>
+      <p><a href={window.location.href}>Sign in again</a></p>
+    </main>;
   }
   if (view.state === 'denied') {
     return <main className="shell auth-state" role="alert">

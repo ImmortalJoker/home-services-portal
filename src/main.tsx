@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { PortalApp } from './PortalApp';
+import './fonts.css';
 import './style.css';
 
 // The worker provides a generic offline message; private pages/API data are never cached.

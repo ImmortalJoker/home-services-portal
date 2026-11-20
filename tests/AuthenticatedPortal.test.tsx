@@ -88,6 +88,19 @@ describe('AuthenticatedPortal', () => {
     expect(screen.queryByRole('button', { name: /customize services/i })).toBeNull();
   });
 
+  it('asks the user to sign in again when the Authentik session has expired', async () => {
+    for (const expired of [{ ...response(0), type: 'opaqueredirect' }, response(401, { error: 'Authentication required.' })]) {
+      const fetchMock = vi.fn().mockResolvedValue(expired);
+      vi.stubGlobal('fetch', fetchMock);
+      render(<AuthenticatedPortal />);
+      expect(await screen.findByText(/your session has ended/i)).toBeTruthy();
+      expect(screen.getByRole('link', { name: /sign in again/i }).getAttribute('href')).toBe(window.location.href);
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: 'manual' });
+      expect(screen.queryByText(/could not load your portal/i)).toBeNull();
+      cleanup();
+    }
+  });
+
   it('fails closed when the private identity endpoint is missing', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(404, undefined, 'text/html')));
     render(<AuthenticatedPortal />);
