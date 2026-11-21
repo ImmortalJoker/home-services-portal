@@ -115,9 +115,16 @@ it('rejects unsafe PORTAL_TRANSMISSION_RPC_URL overrides before contacting RPC a
   const unsafe = [
     'not a url',
     '/transmission/rpc',
+    '//transmission.example.test/rpc',
+    'http:transmission.example.test/rpc',
+    'https:/transmission.example.test/rpc',
+    'http:///transmission.example.test/rpc',
     'ftp://transmission.example.test/rpc',
     'file:///etc/passwd',
+    'http://@transmission.example.test/rpc',
     'http://fixture-user:fixture-pass@transmission.example.test:9091/transmission/rpc',
+    'http://transmission.example.test/rpc?',
+    'http://transmission.example.test/rpc#',
     'http://transmission.example.test:9091/transmission/rpc?x=secret-marker',
     'http://transmission.example.test:9091/transmission/rpc#secret-marker',
   ];

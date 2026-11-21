@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -20,6 +21,19 @@ describe('distributed license notices', () => {
     const normalize = (text: string) => text.replace(/\s+/g, ' ').trim();
     for (const name of ['react', 'react-dom', 'scheduler']) {
       expect(normalize(read('NOTICE'))).toContain(normalize(read(`node_modules/${name}/LICENSE`)));
+    }
+  });
+
+  it('records Fontsource package provenance and SHA-256 digests for every bundled WOFF2 file', () => {
+    const notice = read('NOTICE');
+    const woff2 = readdirSync(resolve(root, 'src/assets/fonts')).filter((name) => name.endsWith('.woff2'));
+    expect(woff2).toHaveLength(8);
+    for (const pkg of ['@fontsource/dm-mono 5.3.0', '@fontsource-variable/dm-sans 5.3.0', '@fontsource-variable/space-grotesk 5.3.0']) {
+      expect(notice).toContain(pkg);
+    }
+    for (const name of woff2) {
+      const digest = createHash('sha256').update(readFileSync(resolve(root, 'src/assets/fonts', name))).digest('hex');
+      expect(notice).toMatch(new RegExp(`${name}\\n\\s+${digest}\\n`));
     }
   });
 

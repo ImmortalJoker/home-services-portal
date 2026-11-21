@@ -33,11 +33,12 @@ export function resolveTransmissionRpcUrl(value) {
   if (!raw) return new URL(DEFAULT_TRANSMISSION_RPC_URL);
   let parsed;
   try {
-    parsed = new URL(raw);
+    // Check the original text before URL parsing can normalize malformed authority or empty delimiters.
+    if (/^https?:\/\/[^/?#@\\\s]+(?:\/[^?#]*)?$/i.test(raw)) parsed = new URL(raw);
   } catch {
     parsed = null;
   }
-  if (!parsed || !['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {
+  if (!parsed) {
     throw new Error('PORTAL_TRANSMISSION_RPC_URL must be an absolute HTTP(S) URL without credentials, query or fragment.');
   }
   return parsed;
