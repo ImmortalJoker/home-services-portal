@@ -1,4 +1,5 @@
-/* Self-hosted fonts (SIL OFL 1.1, from Fontsource 5.3.0; see src/assets/fonts/OFL-*.txt).
+/* Self-hosted fonts (SIL OFL 1.1, from @fontsource/dm-mono, @fontsource-variable/dm-sans and
+   @fontsource-variable/space-grotesk 5.3.0; see NOTICE and src/assets/fonts/OFL-*.txt).
    Served same-origin so loading the portal never contacts a third-party font CDN. */
 @font-face {
   font-family: 'DM Sans';
