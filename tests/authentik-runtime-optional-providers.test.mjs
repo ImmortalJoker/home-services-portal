@@ -389,6 +389,14 @@ test('Metrics host-header mapping drift fails closed', () => {
   }
 });
 
+test('Metrics rejects an additional distinct property mapping', () => {
+  const env = envFor(['metrics']);
+  const world = buildWorld(env);
+  world.propertyMappings.push({ pk: 'map-metrics-extra', name: 'Extra Metrics Mapping', expression: 'return {}' });
+  providerOf(world, 'metrics').property_mappings.push('map-metrics-extra');
+  expectFail(env, world, /metrics: unexpected property mappings$/);
+});
+
 test('Metrics host-header mapping tolerates only whitespace-level differences', () => {
   const env = envFor(['metrics']);
   const world = buildWorld(env);
