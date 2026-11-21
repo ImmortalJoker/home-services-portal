@@ -6,7 +6,9 @@ A configurable, self-hosted homepage for links to services on your home network.
 
 ## Development
 
-Requirements: Node.js 20+ and npm.
+Requirements: Node.js 22.x (22.22.2 or newer) and npm.
+
+[CI](.github/workflows/ci.yml) selects Node 22, and the [portal Dockerfile](deploy/authentik/portal/Dockerfile) uses `node:22-alpine` for both build and runtime. The locked `jsdom` dependency in [package-lock.json](package-lock.json) requires at least 22.22.2 within Node 22. These CI/container selectors do not pin an exact patch version; [package.json](package.json) declares no `engines` range, so broader project support is not established.
 
 ```sh
 npm install

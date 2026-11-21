@@ -57,6 +57,9 @@ export function validateConfig(value: unknown): PortalConfig {
       }
       normalizedGroups = [...new Set(accessGroups.map((group) => group.trim()))];
     }
+    if (widget === 'system-status' && (normalizedGroups?.length !== 1 || normalizedGroups[0] !== 'Portal - Owner')) {
+      throw new Error(`Service ${id} system-status widget must be restricted to Portal - Owner.`);
+    }
     const launch = validateLaunch(item.launch, id, normalizedUrl);
     const guides = validateGuides(item.guides);
     const opdsUrl = validateOpdsUrl(item.opdsUrl, id);

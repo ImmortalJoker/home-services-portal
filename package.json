@@ -13,7 +13,7 @@
     "test:portal-network": "node scripts/verify-portal-network.mjs",
     "test:grocy-proxy-config": "node --test tests/grocy-proxy-config.test.mjs",
     "test:grocy-proxy": "node --test tests/grocy-proxy.test.mjs",
-    "test:portal-server": "node --test tests/portal-server.test.mjs tests/portal-launch.test.mjs tests/portal-worker.test.mjs tests/live-panels.test.mjs tests/portal-peer-trust.test.mjs",
+    "test:portal-server": "node --test tests/portal-config.test.mjs tests/portal-server.test.mjs tests/portal-launch.test.mjs tests/portal-worker.test.mjs tests/live-panels.test.mjs tests/portal-peer-trust.test.mjs",
     "test:authentik-runtime": "node scripts/verify-authentik-runtime.mjs"
   },
   "dependencies": {

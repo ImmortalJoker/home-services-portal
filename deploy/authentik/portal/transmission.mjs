@@ -20,17 +20,45 @@ export function summarizeTorrents(torrents) {
   };
 }
 
+// Docker host gateway + Transmission's standard RPC port and path.
+export const DEFAULT_TRANSMISSION_RPC_URL = 'http://host.docker.internal:9091/transmission/rpc';
+
+/**
+ * Resolves the optional PORTAL_TRANSMISSION_RPC_URL override. Blank/unset keeps the
+ * default; otherwise it must be an absolute HTTP(S) URL without credentials, query or
+ * fragment. Errors never echo the configured value.
+ */
+export function resolveTransmissionRpcUrl(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return new URL(DEFAULT_TRANSMISSION_RPC_URL);
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || !['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error('PORTAL_TRANSMISSION_RPC_URL must be an absolute HTTP(S) URL without credentials, query or fragment.');
+  }
+  return parsed;
+}
+
 export async function requestTransmissionSummary({ request = requestJson } = {}) {
   const username = process.env.PORTAL_TRANSMISSION_RPC_USERNAME;
   const password = process.env.PORTAL_TRANSMISSION_RPC_PASSWORD;
   if (!username || !password) throw new Error('Transmission summary unavailable');
-  const url = 'http://host.docker.internal:9091/transmission/rpc';
-  // node:http keeps this Host header (fetch would replace it), so Transmission's
-  // host whitelist accepts the request even if RPC password auth is ever disabled.
+  const rawOverride = process.env.PORTAL_TRANSMISSION_RPC_URL;
+  const rpcUrl = resolveTransmissionRpcUrl(rawOverride);
+  const url = rpcUrl.href;
+  // node:http keeps the caller-supplied Host header (fetch would replace it). The
+  // default host-gateway endpoint sends localhost:<port> so Transmission's host
+  // whitelist accepts it even if RPC password auth is ever disabled; an explicit
+  // override sends its own authority so virtual-host proxies route correctly.
+  const isOverride = typeof rawOverride === 'string' && rawOverride.trim() !== '';
   const headers = {
     'Content-Type': 'application/json',
     Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
-    Host: 'localhost:9091',
+    Host: isOverride ? rpcUrl.host : `localhost:${rpcUrl.port}`,
   };
   const body = JSON.stringify({ method: 'torrent-get', arguments: { fields: ['status', 'sizeWhenDone', 'leftUntilDone', 'rateDownload', 'rateUpload'] } });
   const send = () => request(url, { method: 'POST', headers, body, maxBytes: 1024 * 1024 });

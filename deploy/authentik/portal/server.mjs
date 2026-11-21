@@ -62,7 +62,7 @@ export function validatePortalConfig(value) {
       throw new Error(`Service ${id} has an unsupported widget.`);
     }
     const normalizedGroups = [...new Set(accessGroups.map((group) => group.trim()))];
-    if (widget === 'system-status' && !normalizedGroups.includes(OWNER_GROUP)) {
+    if (widget === 'system-status' && (normalizedGroups.length !== 1 || normalizedGroups[0] !== OWNER_GROUP)) {
       throw new Error(`Service ${id} system-status widget must be restricted to Portal - Owner.`);
     }
     const url = normalizeServiceUrl(service.url, id);

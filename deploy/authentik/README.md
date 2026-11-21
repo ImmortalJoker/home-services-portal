@@ -1,12 +1,12 @@
 # Local authentik test instance
 
-This Compose project starts an isolated authentik identity provider for development. The web port is bound to `127.0.0.1:9000` only; Compose does not publish it on the LAN or tailnet, and no existing service is placed behind it. This does not isolate it from Docker Desktop peers, which may reach loopback publications through the host gateway. A separate Tailscale Serve configuration may expose it privately on a specific machine; review that machine's Serve status and tailnet policy independently. This scaffold is not an authorization boundary until an application/provider is configured and direct service routes are protected.
+This Compose project starts an isolated authentik identity provider for development. The web port is bound to `127.0.0.1:9000` only; Compose does not publish it on the LAN or tailnet, and no existing service is placed behind it. This does not isolate it from Docker Desktop peers, which may reach loopback publications through the host gateway. A separate Tailscale Serve configuration may expose it privately on the host; review that host's Serve status and tailnet policy independently. This scaffold is not an authorization boundary until an application/provider is configured and direct service routes are protected.
 
 ## Portal live panels and app recommendations
 
-The private portal shows the existing Owner-only Mac status panel above the service tiles, with a 15-second refresh while visible. Transmission's Owner-only tile shows running/total counts, byte-weighted completion, and download/upload rates; its expansion button mounts the existing protected HTTPS web UI in a sandboxed iframe and removes it on collapse. First-time sign-in may require opening the full-page link before reloading the panel. Portal CSP permits framing only that configured HTTPS origin, and only on Owner responses.
+The private portal can show an optional Owner-only host status panel above the service tiles, with a 15-second refresh while visible. Transmission's Owner-only tile shows running/total counts, byte-weighted completion, and download/upload rates; its expansion button mounts the configured protected HTTPS web UI in a sandboxed iframe and removes it on collapse. First-time sign-in may require opening the full-page link before reloading the panel. Portal CSP permits framing only that configured HTTPS origin, and only on Owner responses.
 
-`GET /api/transmission-status` checks the verified portal identity before contacting RPC and returns only numeric aggregates, never torrent names, paths, credentials or session headers. The backend uses the existing `PORTAL_TRANSMISSION_RPC_USERNAME`/`PORTAL_TRANSMISSION_RPC_PASSWORD` environment references; do not place those values in frontend config. No raw RPC or control proxy is added. Anonymous gets 401; Public, Family and Pending get 403. Status responses are `no-store`.
+`GET /api/transmission-status` checks the verified portal identity before contacting RPC and returns only numeric aggregates, never torrent names, paths, credentials or session headers. The backend uses the existing `PORTAL_TRANSMISSION_RPC_USERNAME`/`PORTAL_TRANSMISSION_RPC_PASSWORD` environment references; do not place those values in frontend config. RPC requests go to `http://host.docker.internal:9091/transmission/rpc` (Docker host gateway, Transmission's standard port) unless the optional `PORTAL_TRANSMISSION_RPC_URL` is set in the ignored `.env`; blank keeps that default. An override must be an absolute HTTP(S) URL without credentials, query or fragment, otherwise the status route returns its generic 502 and RPC is not contacted. The default endpoint sends a loopback `Host: localhost:9091` header for Transmission's host whitelist; an override sends its own host and port as `Host`, so reverse proxies and virtual hosts route the request to the configured backend. No raw RPC or control proxy is added. Anonymous gets 401; Public, Family and Pending get 403. Status responses are `no-store`.
 
 App recommendations and setup instructions are configured in each private service entry's optional `guides` field. The backend validates these fields and returns them only after the parent service's existing group filtering. Public users therefore receive only their service guides, Family also receives household guides, and Owner also receives system and Transmission guides. Pending receives none. The iPhone/iPad–Android switch defaults to detected platform and affects guides only; it does not change app-launch links or permissions. Download links use `noreferrer`; copyable service addresses remain separate from external links.
 
@@ -15,18 +15,18 @@ Example service field (illustrative public address):
 ```json
 "guides": {
   "ios": {
-    "title": "AudioBooth",
-    "downloadUrl": "https://apps.apple.com/app/id6753017503",
+    "title": "Example Audio App",
+    "downloadUrl": "https://apps.example.invalid/audio-app",
     "connectionLabel": "Server address",
-    "connectionUrl": "https://audio.example.test:8448/",
+    "connectionUrl": "https://audio.example.invalid/",
     "steps": ["Add a server with the address below.", "Choose SSO and complete sign-in."]
   }
 }
 ```
 
-Supported platform keys are `ios` and `android`. Each guide requires `title` and a nonempty `steps` list; `downloadUrl`, `connectionUrl` and `connectionLabel` are optional. URLs must be credential-free HTTPS. Unknown fields are rejected. Keep credentials, API keys and tokens out of all guide text and URLs. Set the guide's connection address deliberately: Books uses its OPDS URL; native Audiobookshelf uses the unified `:8448` address. To apply metadata-only changes, validate the config and recreate only `portal-test`; no frontend rebuild is needed.
+Supported platform keys are `ios` and `android`. Each guide requires `title` and a nonempty `steps` list; `downloadUrl`, `connectionUrl` and `connectionLabel` are optional. URLs must be credential-free HTTPS. Unknown fields are rejected. Keep credentials, API keys and tokens out of all guide text and URLs. Set the guide's connection address deliberately, for example an OPDS URL for a Books service, or the single HTTPS origin that native Audiobookshelf clients should use in your deployment. To apply metadata-only changes, validate the config and recreate only `portal-test`; no frontend rebuild is needed.
 
-The compact header's route indicator reads the edge-generated `X-Portal-Connection` response header on the session request: green for `local`, blue for `tailscale`, neutral if unavailable. It reports the path used to load the portal, not whether a VPN app is installed, and is not an authorization signal. The LAN Caddy path stamps `local`; the tailnet portal/auth Serve routes use a loopback-only Caddy relay on `9082`, which stamps `tailscale`, preserves the public Host and original forwarded-for metadata, and forwards HTTPS scheme metadata to the same existing Authentik upstream. Other service routes and tailnet access policy remain unchanged.
+The compact header's route indicator reads the edge-generated `X-Portal-Connection` response header on the session request: green for `local`, blue for `tailscale`, neutral if unavailable. It reports the path used to load the portal, not whether a VPN app is installed, and is not an authorization signal. The header is set by your edge proxy, not by this Compose project. One possible layout: the LAN reverse proxy stamps `local`; tailnet portal/auth Serve routes target a loopback-only relay on `127.0.0.1:<relay-port>` that stamps `tailscale`, preserves the public Host and original forwarded-for metadata, and forwards HTTPS scheme metadata to the same Authentik upstream. Adding the header should not change other service routes or tailnet access policy.
 
 After a build, `npm run test:portal-server` includes owner-gating, aggregate privacy and offline-worker tests. These same-host checks do not replace a real authenticated device iframe/login test.
 
@@ -42,7 +42,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Open `http://127.0.0.1:9000/if/flow/initial-setup/` on the Mac to set the initial `akadmin` password. Use a password manager. Never commit or share `.env`; it contains generated database and signing secrets. The database volume and `data/` persist across container restarts.
+Open `http://127.0.0.1:9000/if/flow/initial-setup/` on the Docker host to set the initial `akadmin` password. Use a password manager. Never commit or share `.env`; it contains generated database and signing secrets. The database volume and `data/` persist across container restarts.
 
 Check health and logs:
 
@@ -71,16 +71,17 @@ The Compose project builds the protected portal with `VITE_PORTAL_PUBLIC_DEMO=fa
 
 A missing or non-JSON `/api/session` response is an error, never a switch to the editable public demo. By default Compose mounts `portal-services.json.example`. To customize the isolated demo, copy it to the ignored `deploy/authentik/portal-services.json` and set `PORTAL_CONFIG_FILE=./portal-services.json` in the private environment. The server filters service metadata and protected endpoints after trusted proxy authentication; hiding a tile is not the security boundary.
 
-**Rollout requirement:** this topology change requires recreating the Authentik `server` and `portal-test` together so both acquire the private aliases; changing only the backend image will reject all proxy identities. Preserve the existing database, credentials, outpost providers and any Grocy network overlay. The worker and database do not join the portal-private network. Before any rollout, save the current config/image and schedule the brief Authentik interruption. Afterward verify health, a fresh real-user sign-in, role restrictions and live aggregate panels. `npm run test:portal-network` builds and cleans up synthetic containers to verify peer isolation without touching the household stack; it also checks host-loopback egress with a synthetic service on macOS. Tests that simulate Authentik must explicitly configure their synthetic trusted TCP peer; production has no permissive fallback.
+**Rollout requirement:** this topology change requires recreating the Authentik `server` and `portal-test` together so both acquire the private aliases; changing only the backend image will reject all proxy identities. Preserve the existing database, credentials, outpost providers and any Grocy network overlay. The worker and database do not join the portal-private network. Before any rollout, save the current config/image and schedule the brief Authentik interruption. Afterward verify health, a fresh real-user sign-in, role restrictions and live aggregate panels. `npm run test:portal-network` builds and cleans up synthetic containers to verify peer isolation without touching a running deployment; it also checks host-loopback egress with a synthetic service on macOS. Tests that simulate Authentik must explicitly configure their synthetic trusted TCP peer; production has no permissive fallback.
 
 The protected portal's Authentik application accepts members of Public, Family, Owner, or Pending; the upstream then enforces service visibility and protected demo routes. Pending users receive the Atrium only, with no service links and no access to the demo endpoints. Because this blueprint sets the embedded outpost's provider list to this demo provider, keep this an isolated Authentik test instance. Do not apply it to an instance hosting other applications unless you preserve and include its existing provider assignments.
 
 Portal Owner members are assigned a least-privilege Authentik role so they can use the Admin interface to review the **Pending** group and manage membership of **Public** and **Family**. The role has read access to user records, view-only permission on Pending, and object-scoped view/add/remove membership permissions on Public and Family. It does not grant superuser status, user edit/delete, invitation creation, or any ability to add/remove users in Pending or the **Owner** group; the Owner group itself remains controlled by the Authentik administrator. This lets an Owner inspect waiting users and grant/revoke Public or Family access without being able to promote another account to Owner or self-approve by modifying the Pending group.
 
-For the tailnet test route, first inspect existing Serve configuration and confirm the chosen port is unused. A typical command is:
+For the tailnet test route, first inspect existing Serve configuration and choose an unused HTTPS port. Set `PORTAL_HTTPS_PORT` to that port before running:
 
 ```sh
-tailscale serve --bg --https=8443 http://127.0.0.1:9000
+: "${PORTAL_HTTPS_PORT:?set to an unused HTTPS port}"
+tailscale serve --bg --https="$PORTAL_HTTPS_PORT" http://127.0.0.1:9000
 tailscale serve status
 ```
 
@@ -91,7 +92,7 @@ docker compose up -d --build --force-recreate server portal-test worker
 docker compose logs --tail=100 portal-test worker
 ```
 
-Open the configured `PORTAL_TEST_EXTERNAL_HOST`. Create separate non-admin test users in each of the three groups and verify their visible service cards and direct-route behavior: Public should receive 403 from `/family-check` and `/owner-check`; Family should receive 403 from `/owner-check`; Owner should reach all three. Also verify signed-out users are redirected by Authentik and the portal container has no published host port. The authenticated header offers Sign out through `/outpost.goauthentik.io/sign_out`; the static public demo has no account controls. Superusers are not valid tests of group authorization. These demo routes do not protect any real household service.
+Open the configured `PORTAL_TEST_EXTERNAL_HOST`. Create separate non-admin test users in each of the three groups and verify their visible service cards and direct-route behavior: Public should receive 403 from `/family-check` and `/owner-check`; Family should receive 403 from `/owner-check`; Owner should reach all three. Also verify signed-out users are redirected by Authentik and the portal container has no published host port. The authenticated header offers Sign out through `/outpost.goauthentik.io/sign_out`; the static public demo has no account controls. Superusers are not valid tests of group authorization. These demo routes do not protect any real service.
 
 ## Enrollment and invitations
 
@@ -105,32 +106,33 @@ Google sign-in is configured separately because its Client ID and Secret belong 
 
 The protected portal application permits Pending users to reach the portal, but its backend returns no service cards to a Pending-only account and denies protected demo routes. Real service applications (including Books) must continue to exclude Pending. To approve a person, grant `Portal - Public` or `Portal - Family` membership in Authentik; service access is derived from those groups. The Atrium is not an authorization shortcut, and hiding a tile is not a service boundary.
 
-The Pending group, invitation enrollment flow, Google Pending enrollment flow, and Google source enrollment assignment are applied to the local Authentik instance. A new Google account has not yet completed browser enrollment, so the end-to-end Atrium login still needs that acceptance test. The blueprint configures an in-app Owner notification rule, but delivery is not verified; check **Directory → Groups → Portal - Pending** for awaiting users. SMTP/email is not configured.
+Applying the blueprint creates the Pending group, invitation enrollment flow and Google Pending enrollment flow; the Google source's enrollment-flow assignment is a manual step. After applying, complete a browser enrollment with a fresh Google account as the end-to-end Atrium acceptance test. The blueprint configures an in-app Owner notification rule; verify delivery in your deployment, and check **Directory → Groups → Portal - Pending** for awaiting users. Email delivery requires separate SMTP configuration.
 
 ## Optional Books/Calibre pilot scaffold
 
-`PORTAL_BOOKS_EXTERNAL_HOST` is empty by default, so the Books proxy provider/application is not created or assigned. If configured later, the blueprint grants access to each of `Portal - Public`, `Portal - Family`, and `Portal - Owner` (any one group is sufficient) and proxies to `http://host.docker.internal:8087`. This is only a scaffold; it does not add a Books tile to the private portal config or change the Calibre LaunchAgent.
+`PORTAL_BOOKS_EXTERNAL_HOST` is empty by default, so the Books proxy provider/application is not created or assigned. If configured later, the blueprint grants access to each of `Portal - Public`, `Portal - Family`, and `Portal - Owner` (any one group is sufficient) and proxies to the blueprint's upstream `internal_host` (default `http://host.docker.internal:8087`; edit the blueprint if your Calibre content server listens on another port, written `<calibre-port>` below). This is only a scaffold; it does not add a Books tile to the private portal config or change how the Calibre server process is launched.
 
-Do not activate this pilot until the portal authentication/group tests pass. Back up the existing Calibre service configuration, bind Calibre to loopback so its direct LAN/tailnet listener is closed, and verify the change before enabling the proxy. Confirm the Authentik server can reach the upstream through an explicitly configured private network path; do not assume host-gateway access is isolated. Keep Calibre's read-only server flags. Configure the Book provider with a dedicated HTTPS URL in the ignored local `.env` (for example, `https://<machine>.ts.net:8444`); inspect existing Tailscale Serve routes and confirm the port is unused before adding a route to the local Authentik proxy. Do not use Funnel or router port forwarding.
+Do not activate this pilot until the portal authentication/group tests pass. Back up the existing Calibre service configuration, bind Calibre to loopback so its direct LAN/tailnet listener is closed, and verify the change before enabling the proxy. Confirm the Authentik server can reach the upstream through an explicitly configured private network path; do not assume host-gateway access is isolated. Keep Calibre's read-only server flags. Configure the Book provider with a dedicated HTTPS URL in the ignored local `.env` (for example, `https://<tailnet-host>:<books-https-port>`); inspect existing Tailscale Serve routes and confirm the port is unused before adding a route to the local Authentik proxy. Do not use Funnel or router port forwarding.
 
 Future activation sequence, only after the interactive authorization gate passes:
 
-1. Back up the current Calibre LaunchAgent plist. Change `--listen-on=0.0.0.0` to `--listen-on=127.0.0.1`, restart it, and verify Calibre still serves on loopback while `lsof` shows no all-interface `:8087` listener.
-2. Set `PORTAL_BOOKS_EXTERNAL_HOST=https://<machine>.ts.net:8444` in the ignored `deploy/authentik/.env`; add the Books card with that URL and `accessGroups: ["Portal - Public"]` to the ignored local portal config. Do not put the machine URL in the generic example or public repo.
-3. After checking that `:8444` is unused, add the tailnet-only Tailscale Serve route and verify it with `tailscale serve status`. Then from `deploy/authentik/` run:
+1. Back up whatever starts the Calibre content server (for example a launchd job, systemd unit or container definition). Change its listen address from all interfaces (`--listen-on=0.0.0.0`) to loopback (`--listen-on=127.0.0.1`), restart it, and verify Calibre still serves on loopback while a listener check (for example `lsof -nP -iTCP:"$CALIBRE_PORT" -sTCP:LISTEN`, after setting `CALIBRE_PORT`) shows no all-interface listener.
+2. Set `PORTAL_BOOKS_EXTERNAL_HOST` to your deployment's HTTPS URL in the ignored `deploy/authentik/.env`; `https://books.example.invalid/` is a documentation-only placeholder. Add the Books card with that URL and `accessGroups: ["Portal - Public"]` to the ignored local portal config. Do not put a real host URL in the generic example or public repo.
+3. Choose and verify an unused HTTPS port, then set `BOOKS_HTTPS_PORT` in the shell before adding the tailnet-only Tailscale Serve route. Verify it with `tailscale serve status`. Then from `deploy/authentik/` run:
 
    ```sh
-   tailscale serve --bg --https=8444 http://127.0.0.1:9000
+   : "${BOOKS_HTTPS_PORT:?set to an unused HTTPS port}"
+   tailscale serve --bg --https="$BOOKS_HTTPS_PORT" http://127.0.0.1:9000
    tailscale serve status
    docker compose up -d --force-recreate worker
    docker compose exec -T worker ak apply_blueprint /blueprints/portal-access-groups.yaml
    ```
 
-4. Verify a signed-out request redirects to Authentik, an approved household account can browse/download, an ungranted account is denied, and the former direct LAN/tailnet `:8087` route fails. Test FBReader/Apple Books OPDS/download behavior before considering the pilot complete.
+4. Verify a signed-out request redirects to Authentik, an approved account can browse/download, an ungranted account is denied, and the former direct LAN/tailnet `<calibre-port>` route fails. Test your OPDS clients' browsing/download behavior before considering the pilot complete.
 
-Rollback: remove the `:8444` Serve route, blank `PORTAL_BOOKS_EXTERNAL_HOST`, recreate the worker and reapply the blueprint so the outpost drops the Books provider, then restore the saved LaunchAgent plist and verify the previous `:8087` behavior. The blueprint does not delete the now-unassigned Books application/provider records; remove those only after confirming they are no longer assigned to the outpost.
+Rollback: remove the Books Serve route, blank `PORTAL_BOOKS_EXTERNAL_HOST`, recreate the worker and reapply the blueprint so the outpost drops the Books provider, then restore the saved Calibre launch configuration and verify its prior behavior. The blueprint does not delete the now-unassigned Books application/provider records; remove those only after confirming they are no longer assigned to the outpost.
 
-The URL to open in a browser is not automatically usable by native OPDS clients: Authentik's interactive sign-in may not be supported by FBReader or Apple Books. Test browsing, download, OPDS feeds, and client sign-in before calling the pilot complete. If a native client cannot authenticate, do not restore an unauthenticated network listener as a workaround; keep the pilot disabled and choose a compatible access design. Setting the external-host variable without closing the old direct route does **not** enforce Authentik.
+The URL to open in a browser is not automatically usable by native OPDS clients: Authentik's interactive sign-in may not be supported by native OPDS reader apps. Test browsing, download, OPDS feeds, and client sign-in before calling the pilot complete. If a native client cannot authenticate, do not restore an unauthenticated network listener as a workaround; keep the pilot disabled and choose a compatible access design. Setting the external-host variable without closing the old direct route does **not** enforce Authentik.
 
 To run the repeat-apply/membership regression check against this dedicated test instance, start the stack and run from the repository root:
 
@@ -138,14 +140,13 @@ To run the repeat-apply/membership regression check against this dedicated test 
 npm run test:authentik-runtime -- --confirm-test-stack
 ```
 
-The check reapplies the blueprint twice, creates and removes a random disabled Owner-role test account, and verifies membership plus provider/application/outpost/policy wiring and the local notification rule targeting `authentik Admins`. It does not prove delivery from a completed enrollment flow or remote phone access; those still need a real client. Local Authentik notifications appear in-app; SMTP/email is not configured.
+The check reapplies the blueprint twice, creates and removes a random disabled Owner-role test account, and verifies membership plus provider/application/outpost/policy wiring and the local notification rule targeting `authentik Admins`. It does not prove delivery from a completed enrollment flow or remote phone access; those still need a real client. Local Authentik notifications appear in-app; email delivery requires separate SMTP configuration.
 
 ## Optional Audiobookshelf gateway
 
+`PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST` is empty by default. When configured, the blueprint creates an Authentik proxy application for a loopback Audiobookshelf upstream at the blueprint's `internal_host` (default `http://host.docker.internal:13378`; edit the blueprint if your instance uses another port), grants it to Public, Family, and Owner, and assigns it to the embedded outpost. The deployment-specific HTTPS URL belongs only in the ignored `.env` and private portal service config, never in this repository.
 
-`PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST` is empty by default. When configured, the blueprint creates an Authentik proxy application for the loopback Audiobookshelf upstream at `http://host.docker.internal:13378`, grants it to Public, Family, and Owner, and assigns it to the embedded outpost. The household-specific Tailscale HTTPS URL belongs only in the ignored `.env` and private portal service config, never in this repository.
-
-This gateway adds Authentik authorization before the Audiobookshelf web app; it does not replace Audiobookshelf's own local login, so a browser may see both gates. Native clients may not follow the gateway's browser redirect. Keep the existing tailnet TCP route on `:13378` until the chosen phone/client behavior is checked, and do not call the migration complete while an unprotected route remains. Do not alter the library, user database, or local-auth configuration as part of enabling the gateway.
+This gateway adds Authentik authorization before the Audiobookshelf web app; it does not replace Audiobookshelf's own local login, so a browser may see both gates. Native clients may not follow the gateway's browser redirect. If clients currently use a direct route to Audiobookshelf, keep it until the chosen phone/client behavior is checked, and do not call the migration complete while an unprotected route remains. Do not alter the library, user database, or local-auth configuration as part of enabling the gateway.
 
 Before enabling, verify that the Authentik server container can reach the loopback-bound upstream, inspect existing Serve configuration, and ensure the separate HTTPS route is tailnet-only. An upstream HTTP 200 does not prove phone reachability or client compatibility.
 
@@ -157,15 +158,15 @@ The OIDC application is hidden from the launcher and grants authorization only t
 
 ## Optional owner-only metrics gateway
 
-`PORTAL_METRICS_EXTERNAL_HOST` is empty by default. When configured, the blueprint adds an Authentik proxy provider for the read-only metrics API at `http://host.docker.internal:8086`, grants the application only to `Portal - Owner`, and assigns it to the embedded outpost. A provider property mapping forwards the configured external hostname as the upstream `Host` header because the metrics API rejects unknown hostnames. Keep the household HTTPS URL in the ignored `.env` and private portal configuration only.
+`PORTAL_METRICS_EXTERNAL_HOST` is empty by default. When configured, the blueprint adds an Authentik proxy provider for a read-only metrics API at the blueprint's `internal_host` (default `http://host.docker.internal:8086`; edit the blueprint for another port), grants the application only to `Portal - Owner`, and assigns it to the embedded outpost. A provider property mapping forwards the configured external hostname as the upstream `Host` header, for metrics APIs that reject unknown hostnames. Keep the deployment's HTTPS URL in the ignored `.env` and private portal configuration only.
 
-This does not change the metrics API listener or the legacy dashboard. The existing dashboard still calls port `8086` directly, so keep that listener unchanged until the dashboard is migrated and the owner accepts the replacement. The protected route is additive; the direct API remains a bypass during this staged phase.
+This does not change the metrics API listener or any existing dashboard. If a legacy dashboard calls the metrics port directly, keep that listener unchanged until the dashboard is migrated and the owner accepts the replacement. The protected route is additive; the direct API remains a bypass during this staged phase.
 
 ## Optional Owner-only Transmission gateway
 
-`PORTAL_TRANSMISSION_EXTERNAL_HOST` is empty by default. When set to the HTTPS origin for a tailnet-only Tailscale Serve route, the blueprint creates an Authentik proxy to `http://host.docker.internal:9091`, exposes the Transmission Web UI, and binds the application only to `Portal - Owner`. The provider mapping sets the upstream `Host` to `127.0.0.1:9091`, which is accepted by the default local Transmission RPC configuration; adjust that mapping if the upstream instance uses a different accepted RPC Host value. Keep the protected route tailnet-only and do not use Funnel.
+`PORTAL_TRANSMISSION_EXTERNAL_HOST` is empty by default. When set to the HTTPS origin for a tailnet-only Tailscale Serve route, the blueprint creates an Authentik proxy to the blueprint's `internal_host` (default `http://host.docker.internal:9091`, Transmission's standard RPC port), exposes the Transmission Web UI, and binds the application only to `Portal - Owner`. The provider mapping sets the upstream `Host` to `127.0.0.1:9091`, which is accepted by the default local Transmission RPC configuration; adjust that mapping if the upstream instance uses a different accepted RPC Host value. Keep the protected route tailnet-only and do not use Funnel.
 
-This is a staged replacement route, not a completed cutover: it does not close Transmission's direct route or change the legacy dashboard, which embeds full-control Transmission UI. Preserve both until the protected UI and API/RPC actions are verified by the Owner, then separately plan the dashboard replacement and direct-route closure. The route requires Authentik authorization in addition to Tailscale reachability.
+This is a staged replacement route, not a completed cutover: it does not close Transmission's direct route or change any existing dashboard that embeds a full-control Transmission UI. Preserve those until the protected UI and API/RPC actions are verified by the Owner, then separately plan the dashboard replacement and direct-route closure. The route requires Authentik authorization in addition to Tailscale reachability.
 
 ### Transmission RPC authentication
 
@@ -187,9 +188,9 @@ To show the status inline on the authenticated portal, add `"widget": "system-st
 
 Set `PORTAL_IMMICH_OIDC_CLIENT_SECRET` plus the five exact base callback variables in the private environment to create a confidential Authentik OIDC client. Family/Owner bindings remain unchanged; Public/Pending are excluded. The provider assigns only `openid` and the custom no-email `profile` mapping. It emits neither `email`, `email_verified` nor `immich_role`, and must not assign Authentik's email mapping even if a client requests the email scope.
 
-Register strict Authorization URIs from every exact Immich origin in use: `/auth/login` for normal web OAuth and `/user-settings` for account linking, plus `app.immich:///oauth-callback` for Android/iOS. To add a tailnet/LAN hostname without removing working origins, set both optional `PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL` and `PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL`; the blueprint adds both strictly only when both are present. For a separate HTTPS reverse-proxy origin, set both optional `PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL` and `PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL`; both are added strictly only when both are present, and existing callbacks remain registered. Configure exact callbacks for every origin you intend to use; never commit household URLs. In Immich, use client ID `immich-oidc`, the Authentik provider issuer, scopes `openid profile`, and Auto Register off.
+Register strict Authorization URIs from every exact Immich origin in use: `/auth/login` for normal web OAuth and `/user-settings` for account linking, plus `app.immich:///oauth-callback` for Android/iOS. To add a tailnet/LAN hostname without removing working origins, set both optional `PORTAL_IMMICH_OIDC_TAILNET_LOGIN_CALLBACK_URL` and `PORTAL_IMMICH_OIDC_TAILNET_LINK_CALLBACK_URL`; the blueprint adds both strictly only when both are present. For a separate HTTPS reverse-proxy origin, set both optional `PORTAL_IMMICH_OIDC_HTTPS_LOGIN_CALLBACK_URL` and `PORTAL_IMMICH_OIDC_HTTPS_LINK_CALLBACK_URL`; both are added strictly only when both are present, and existing callbacks remain registered. Configure exact callbacks for every origin you intend to use; never commit deployment-specific URLs. In Immich, use client ID `immich-oidc`, the Authentik provider issuer, scopes `openid profile`, and Auto Register off.
 
-**Account linking:** the installed Immich v3.4.1 implementation accepts an optional email claim, attempts email-based linking for unlinked subjects, and does not check `email_verified` before linking. Returning `email_verified=false` therefore does not close this path. The no-email provider prevents it: already-linked OAuth subjects continue to sign in, while new/unlinked subjects cannot silently claim an existing account or auto-register. Link a pre-provisioned account through **User Settings → OAuth link** from an already authenticated Immich session. This uses the stable subject and does not require an email claim. Keep recovery access and existing links intact; do not unlink users or change the provider subject mode. Invitation email entry alone is not ownership verification.
+**Account linking:** at least some Immich releases (re-check the version you run) accept an optional email claim, attempt email-based linking for unlinked subjects, and do not check `email_verified` before linking. Returning `email_verified=false` therefore does not close this path. The no-email provider prevents it: already-linked OAuth subjects continue to sign in, while new/unlinked subjects cannot silently claim an existing account or auto-register. Link a pre-provisioned account through **User Settings → OAuth link** from an already authenticated Immich session. This uses the stable subject and does not require an email claim. Keep recovery access and existing links intact; do not unlink users or change the provider subject mode. Invitation email entry alone is not ownership verification.
 
 **Live rollout remains separate:** apply this provider change only with a reviewed before/after mapping snapshot and a recovery session available. Verify that the actual provider has no email-scope mapping, then test an already-linked user and explicit linking on intended clients. Existing sessions are not revoked by changing a scope mapping. No claim is made that the code-only patch has changed a running provider. A future verified-email onboarding flow requires explicit address verification and invalidation after address changes; do not restore automatic email matching by merely asserting `email_verified=true`.
 
@@ -197,7 +198,7 @@ No `immich_role` claim is issued; never add an `admin` role for Family. When the
 
 ## Optional Family and Owner Grocy gateway
 
-`PORTAL_GROCY_EXTERNAL_HOST` is empty by default. When configured, the blueprint creates a proxy application bound only to `Portal - Family` and `Portal - Owner`; Public and Pending receive no grant. `PORTAL_GROCY_INTERNAL_HOST` defaults to `http://grocy:80` in Compose and is passed to the blueprint through the worker. Keep household URLs in the ignored `.env` and private portal config.
+`PORTAL_GROCY_EXTERNAL_HOST` is empty by default. When configured, the blueprint creates a proxy application bound only to `Portal - Family` and `Portal - Owner`; Public and Pending receive no grant. `PORTAL_GROCY_INTERNAL_HOST` defaults to `http://grocy:80` in Compose and is passed to the blueprint through the worker. Keep deployment-specific URLs in the ignored `.env` and private portal config.
 
 **Network boundary warning.** A service bound to host loopback may still be reachable by Docker Desktop peer containers through the host gateway. Header scrubbing protects only requests that traverse the configured ingress; it does not isolate a directly reachable upstream or Authentik outpost. Verify the effective container topology and every direct route before treating the proxy as an authorization boundary.
 
@@ -205,7 +206,7 @@ No `immich_role` claim is issued; never add an `admin` role for Family. When the
 
 [compose.grocy.yml](compose.grocy.yml) adds a dedicated user-defined, internal network. Only `server` (the embedded Authentik outpost) and `grocy` join `grocy_private`. Grocy has **no host-published ports**, no host networking, and no default-network attachment. The server retains its default network for Authentik dependencies and resolves the private service alias `grocy`. The worker, portal, database, and unrelated containers are not private-network members. Base deployments using only `compose.yml` do not start Grocy or create this network. Because `grocy_private` is internal, Grocy has no direct external network route; verify any egress-dependent integrations before use.
 
-For deployment, use a pinned image digest compatible with the existing `/config` and container port 80, and preserve the current Grocy `PUID`, `PGID`, and timezone. In the ignored `.env`, set `GROCY_IMAGE`, `GROCY_CONFIG_PATH`, `GROCY_PUID`, `GROCY_PGID`, `GROCY_TZ`, and the chosen `PORTAL_GROCY_EXTERNAL_HOST`. Back up and deliberately migrate the existing config directory; do not start two Grocy containers against one writable database. Leave `PORTAL_GROCY_INTERNAL_HOST=http://grocy:80`. Render/review before starting:
+For deployment, use a pinned image digest compatible with your Grocy `/config` data and container port 80; if migrating an existing instance, preserve its `PUID`, `PGID`, and timezone. In the ignored `.env`, set `GROCY_IMAGE`, `GROCY_CONFIG_PATH`, `GROCY_PUID`, `GROCY_PGID`, `GROCY_TZ`, and the chosen `PORTAL_GROCY_EXTERNAL_HOST`. Back up and deliberately migrate the existing config directory; do not start two Grocy containers against one writable database. Leave `PORTAL_GROCY_INTERNAL_HOST=http://grocy:80`. Render/review before starting:
 
 ```sh
 cd deploy/authentik
@@ -214,7 +215,7 @@ docker compose -f compose.yml -f compose.grocy.yml config --quiet
 docker compose -f compose.yml -f compose.grocy.yml up -d
 ```
 
-This overlay defines a new service; it does not modify an existing Grocy container or migrate data. Do not combine it with another Grocy service definition containing `ports`: Compose merging can retain those publications. Remove the old publication/container route as a separately planned cutover, including the old port 9283, IPv4/IPv6 listeners, alternate proxies, and Serve routes. Check the effective deployment for zero Grocy publications. Do not attach other containers to the private network. A private Docker network does not protect against a Docker administrator, privileged/host-network containers, a compromised outpost, or host access.
+This overlay defines a new service; it does not modify an existing Grocy container or migrate data. Do not combine it with another Grocy service definition containing `ports`: Compose merging can retain those publications. Remove the old publication/container route as a separately planned cutover, including any previously published Grocy port (`<old-grocy-port>`), IPv4/IPv6 listeners, alternate proxies, and Serve routes. Check the effective deployment for zero Grocy publications. Do not attach other containers to the private network. A private Docker network does not protect against a Docker administrator, privileged/host-network containers, a compromised outpost, or host access.
 
 Grocy's own login remains a second step by default. If choosing `ReverseProxyAuthMiddleware`, explicitly configure least-privilege `DEFAULT_PERMISSIONS` and a safe identity mapping before first use; it can create users automatically. Keep Grocy authentication enabled.
 
@@ -230,7 +231,7 @@ Tailnet HTTPS -> Serve -> Caddy 127.0.0.1:9080 -+      |                        
 
 Caddy deletes the entire client `X-Authentik-*` request-header namespace before Authentik on every path, preserving session cookies and `GROCY-API-KEY`. Authentik can then add verified identity downstream. Do not scrub between the outpost and Grocy. Both Caddy routes target Authentik, never Grocy. Set `GROCY_LAN_ADDRESS` with DNS and a trusted certificate; set `GROCY_PUBLIC_AUTHORITY` to the host and optional port of `PORTAL_GROCY_EXTERNAL_HOST` without scheme/path. Both ingress paths use this canonical HTTPS origin, which must be reachable along with the Authentik login origin.
 
-`GROCY_OUTPOST_UPSTREAM` defaults to `127.0.0.1:9000`. Keep the Caddy Serve listener bound to `127.0.0.1`; after reviewing existing Serve state, the operator command shape is `tailscale serve --bg --https=<chosen-https-port> http://127.0.0.1:9080`. **Serve must target its loopback Caddy listener, never the outpost directly.** Keep it tailnet-only; do not enable Funnel. This route change does not prevent Docker peers reaching the published outpost directly.
+`GROCY_OUTPOST_UPSTREAM` defaults to `127.0.0.1:9000`, and `GROCY_SERVE_ADDRESS` defaults to `http://:9080` (the template's loopback Serve listener; change it if that port is taken). Keep the Caddy Serve listener bound to `127.0.0.1`. After reviewing existing Serve state, set `HTTPS_PORT` to an unused HTTPS port and `SERVE_LISTENER_PORT` to the configured listener; the command shape is `tailscale serve --bg --https="$HTTPS_PORT" "http://127.0.0.1:$SERVE_LISTENER_PORT"`. **Serve must target its loopback Caddy listener, never the outpost directly.** Keep it tailnet-only; do not enable Funnel. This route change does not prevent Docker peers reaching the published outpost directly.
 
 ### API skip and native clients remain disabled/pending
 
@@ -246,13 +247,15 @@ Run `npm run test:grocy-proxy-config` and `npm run test:grocy-proxy` in a dispos
 
 Before claiming a completed deployment, verify effective Compose networks and published ports, upstream reachability, and denial through every alternate route, including service aliases and host-gateway paths. Check that forged identity headers still require authentication; verify both ingress paths, signed-out denial, allowed groups, and denied groups. Audit direct routes and Serve targets without logging credentials. Fixture tests do not establish live Docker isolation, provider state, host listeners, Grocy middleware behavior, migration safety, or native-client compatibility.
 
-## Not configured yet
+## Not configured by this repository
+
+These remain manual, per-deployment steps; track their status in your private deployment notes, not here:
 
 - Google OAuth source/client credentials and sign-in flow
-- Email delivery for owner notifications (the in-app Authentik notification is configured; SMTP is not)
-- Invitation-only enrollment flow is configured and applied, but not browser-tested; no invitations are pre-created
-- User membership or grants for real household services
-- Books/Calibre provider scaffold is opt-in only; it is not enabled and the direct-port bypass remains open
+- Email delivery for owner notifications (the blueprint configures the in-app Authentik notification; SMTP is separate)
+- Browser testing of the invitation-only enrollment flow; no invitations are pre-created
+- User membership or grants for real services
+- Books/Calibre provider scaffold is opt-in only; enabling it does not close a direct-port bypass by itself
 - Audiobookshelf native OIDC is opt-in and requires site-specific callback URLs plus a matching local user for each person
 - Reverse-proxy protection of existing services and direct-port bypass closure
 

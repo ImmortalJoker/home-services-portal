@@ -59,6 +59,7 @@ assert.equal(services.worker.environment.PORTAL_GROCY_INTERNAL_HOST, 'http://gro
 assert.equal('PORTAL_GROCY_API_KEY_PATH_REGEX' in services.worker.environment, false, 'The Grocy API skip must not be configurable by environment.');
 assert.equal(services.worker.environment.PORTAL_TRANSMISSION_RPC_USERNAME, '', 'Transmission RPC credentials must be blank by default.');
 assert.equal(services.worker.environment.PORTAL_TRANSMISSION_RPC_PASSWORD, '', 'Transmission RPC credentials must be blank by default.');
+assert.equal(services['portal-test'].environment.PORTAL_TRANSMISSION_RPC_URL, '', 'The portal must pass through a blank Transmission RPC URL override by default.');
 assert.equal(services['portal-test'].environment.PORTAL_STATUS_UPSTREAM_URL, '', 'The status widget upstream must remain disabled by default.');
 assert.equal(services['portal-test'].environment.PORTAL_STATUS_EXTERNAL_URL, '', 'The status widget external host must remain empty by default.');
 

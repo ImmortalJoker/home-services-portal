@@ -22,6 +22,9 @@ export function normalizeServiceUrl(value, id) {
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     throw new Error(`Service ${id} URL must use HTTP or HTTPS.`);
   }
+  if (parsed.username || parsed.password) {
+    throw new Error(`Service ${id} URL must not contain credentials.`);
+  }
   return parsed.href;
 }
 

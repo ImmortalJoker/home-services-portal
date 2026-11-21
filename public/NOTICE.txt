@@ -1,0 +1,76 @@
+Third-party notices
+===================
+
+The project license in LICENSE does not replace the licenses of third-party
+components. Retain the applicable copyright notices and license texts when
+redistributing those components, including in built distributions.
+
+Distribution locations
+----------------------
+
+Source texts: LICENSE (project MIT), this NOTICE (including the React runtime
+MIT text below), and src/assets/fonts/OFL-*.txt (full font copyright notices
+and OFL texts). Static copies are kept in public/LICENSE.txt,
+public/NOTICE.txt and public/licenses/OFL-*.txt, respectively.
+
+Both Vite builds copy these to dist/LICENSE.txt, dist/NOTICE.txt and
+dist/licenses/OFL-*.txt. In the public Pages build they are reachable under
+the configured base path (by default /home-services-portal/), for example
+/home-services-portal/LICENSE.txt and /home-services-portal/NOTICE.txt.
+The three font texts are under /home-services-portal/licenses/ using the
+OFL filenames listed below.
+
+The Authentik Docker runtime includes the same files in /app/dist/ and
+serves them at /LICENSE.txt, /NOTICE.txt and /licenses/OFL-*.txt.
+
+Bundled fonts
+-------------
+
+All eight WOFF2 files in src/assets/fonts/ are licensed under the SIL Open
+Font License, Version 1.1. The full copyright notices and license texts are
+included alongside the source fonts; distribution copies use the same OFL
+filenames under licenses/ as described above:
+
+- DM Mono: dm-mono-latin-{400,500}-normal.woff2 and
+  dm-mono-latin-ext-{400,500}-normal.woff2.
+  Copyright 2020 The DM Mono Project Authors.
+  License: src/assets/fonts/OFL-DM-Mono.txt
+  Source: https://github.com/google/fonts/blob/main/ofl/dmmono/OFL.txt
+- DM Sans: dm-sans-{latin,latin-ext}-wght-normal.woff2.
+  Copyright 2014 The DM Sans Project Authors.
+  License: src/assets/fonts/OFL-DM-Sans.txt
+  Source: https://github.com/google/fonts/blob/main/ofl/dmsans/OFL.txt
+- Space Grotesk: space-grotesk-{latin,latin-ext}-wght-normal.woff2.
+  Copyright 2020 The Space Grotesk Project Authors.
+  License: src/assets/fonts/OFL-Space-Grotesk.txt
+  Source: https://github.com/google/fonts/blob/main/ofl/spacegrotesk/OFL.txt
+
+React runtime packages
+----------------------
+
+react 19.3.1, react-dom 19.3.1 and scheduler 0.28.0 (package-lock.json).
+Source: https://github.com/facebook/react/blob/v19.3.1/LICENSE
+Versions and MIT license declarations: packages/react/package.json,
+packages/react-dom/package.json and packages/scheduler/package.json in that tag.
+
+MIT License
+
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

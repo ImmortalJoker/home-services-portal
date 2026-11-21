@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { buildOptionalProviderVerification } from './authentik-runtime-optional-providers.mjs';
 
 const confirmation = '--confirm-test-stack';
 if (!process.argv.includes(confirmation)) {
@@ -65,6 +66,7 @@ from authentik.policies.event_matcher.models import EventMatcherPolicy
 from authentik.sources.oauth.models import OAuthSource
 from authentik.stages.identification.models import IdentificationStage
 import os
+${buildOptionalProviderVerification()}
 
 portal_groups = Group.objects.filter(name__in=['Portal - Public', 'Portal - Family', 'Portal - Owner', 'Portal - Pending'])
 assert portal_groups.count() == 4
@@ -164,79 +166,9 @@ assert application.provider.pk == provider.pk
 
 outpost = Outpost.objects.get(name='authentik Embedded Outpost')
 assert Outpost.objects.filter(name='authentik Embedded Outpost').count() == 1
-expected_provider_names = {'Portal Test Protected Service Provider'} if os.environ.get('PORTAL_TEST_EXTERNAL_HOST') else set()
-if os.environ.get('PORTAL_BOOKS_EXTERNAL_HOST'):
-    expected_provider_names.add('Portal Books Protected Service Provider')
-if os.environ.get('PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST'):
-    expected_provider_names.add('Portal Audiobookshelf Protected Service Provider')
-if os.environ.get('PORTAL_METRICS_EXTERNAL_HOST'):
-    expected_provider_names.add('Portal Metrics Protected Service Provider')
-assert set(outpost.providers.values_list('name', flat=True)) == expected_provider_names
+portal_test_provider_names = {'Portal Test Protected Service Provider'} if os.environ.get('PORTAL_TEST_EXTERNAL_HOST') else set()
 assert outpost.providers.filter(pk=application.provider.pk).count() == 1
-
-books_host = os.environ.get('PORTAL_BOOKS_EXTERNAL_HOST')
-if books_host:
-    books_application = Application.objects.get(slug='portal-books')
-    books_provider = ProxyProvider.objects.get(name='Portal Books Protected Service Provider')
-    assert books_application.provider.pk == books_provider.pk
-    assert books_provider.internal_host == 'http://host.docker.internal:8087'
-    books_bindings = PolicyBinding.objects.filter(
-        target=books_application,
-        enabled=True,
-        negate=False,
-        group__name__in=['Portal - Public', 'Portal - Family', 'Portal - Owner'],
-    ).order_by('order')
-    assert list(books_bindings.values_list('order', 'group__name')) == [
-        (0, 'Portal - Public'),
-        (1, 'Portal - Family'),
-        (2, 'Portal - Owner'),
-    ]
-else:
-    books_application = Application.objects.filter(slug='portal-books').first()
-    if books_application:
-        assert not outpost.providers.filter(pk=books_application.provider.pk).exists()
-
-audiobookshelf_host = os.environ.get('PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST')
-if audiobookshelf_host:
-    audiobookshelf_application = Application.objects.get(slug='portal-audiobookshelf')
-    audiobookshelf_provider = ProxyProvider.objects.get(name='Portal Audiobookshelf Protected Service Provider')
-    assert audiobookshelf_application.provider.pk == audiobookshelf_provider.pk
-    assert audiobookshelf_provider.internal_host == 'http://host.docker.internal:13378'
-    audiobookshelf_bindings = PolicyBinding.objects.filter(
-        target=audiobookshelf_application,
-        enabled=True,
-        negate=False,
-        group__name__in=['Portal - Public', 'Portal - Family', 'Portal - Owner'],
-    ).order_by('order')
-    assert list(audiobookshelf_bindings.values_list('order', 'group__name')) == [
-        (0, 'Portal - Public'),
-        (1, 'Portal - Family'),
-        (2, 'Portal - Owner'),
-    ]
-else:
-    audiobookshelf_application = Application.objects.filter(slug='portal-audiobookshelf').first()
-    if audiobookshelf_application:
-        assert not outpost.providers.filter(pk=audiobookshelf_application.provider.pk).exists()
-
-metrics_host = os.environ.get('PORTAL_METRICS_EXTERNAL_HOST')
-if metrics_host:
-    metrics_application = Application.objects.get(slug='portal-metrics')
-    metrics_provider = ProxyProvider.objects.get(name='Portal Metrics Protected Service Provider')
-    assert metrics_application.provider.pk == metrics_provider.pk
-    assert metrics_provider.internal_host == 'http://host.docker.internal:8086'
-    mapping = metrics_provider.property_mappings.get(name='Portal Metrics Host Header')
-    assert 'host_header' in mapping.expression
-    metrics_bindings = PolicyBinding.objects.filter(
-        target=metrics_application,
-        enabled=True,
-        negate=False,
-        group__name__in=['Portal - Public', 'Portal - Family', 'Portal - Owner', 'Portal - Pending'],
-    )
-    assert list(metrics_bindings.values_list('group__name', flat=True)) == ['Portal - Owner']
-else:
-    metrics_application = Application.objects.filter(slug='portal-metrics').first()
-    if metrics_application:
-        assert not outpost.providers.filter(pk=metrics_application.provider.pk).exists()
+portal_verify_optional_providers(outpost, portal_test_provider_names)
 
 bindings = PolicyBinding.objects.filter(
     target=application,
@@ -268,7 +200,7 @@ try {
   runCompose(['run', '--rm', '--no-deps', 'worker', 'apply_blueprint', '/blueprints/portal-access-groups.yaml'], 'Second blueprint reapplication');
   const result = runAuthentikShell(verifyAfterReapply, 'Post-reapplication verification');
   assert.match(result, /GROUPS_PROVIDER_APPLICATION_OUTPOST_POLICIES_MEMBERSHIP_AND_ADMIN_NOTIFICATION_RULE_CONFIGURED/);
-  console.log('Authentik runtime integration passed: Pending Atrium access, source-scoped Google enrollment with external-user default-app redirect and default enrollment closed, invitation enrollment, Owner review-only Pending access plus Public/Family group grants, Authentik Admins notification rule configuration, repeated blueprint application, provider/application/outpost policies, and membership preservation.');
+  console.log('Authentik runtime integration passed: Pending Atrium access, source-scoped Google enrollment with external-user default-app redirect and default enrollment closed, invitation enrollment, Owner review-only Pending access plus Public/Family group grants, Authentik Admins notification rule configuration, repeated blueprint application, provider/application/outpost policies, fail-closed enabled/disabled checks for every optional provider (Books, Audiobookshelf, Metrics, Transmission, Grocy, Audiobookshelf OIDC, Immich OIDC), and membership preservation.');
 } catch (error) {
   primaryError = error;
   throw error;
