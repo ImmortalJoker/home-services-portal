@@ -1,18 +1,29 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { isScalar, parseDocument, visit } from 'yaml';
 
 const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
 
 function assertWorkflowActionPins(source: string) {
-  const actionLines = source.split(/\r?\n/).filter((line) => /^\s*(?:-\s*)?uses\s*:/.test(line));
-  const uses = [...source.matchAll(/^\s*(?:-\s*)?uses\s*:\s*(\S+)(?:\s+#\s*(.*))?\s*$/gm)];
-  expect(uses).toHaveLength(actionLines.length);
-  expect(uses.length).toBeGreaterThan(0);
-  for (const [, ref, version] of uses) {
-    expect(ref).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
-    expect(version).toMatch(/^v\d+\.\d+\.\d+$/);
-  }
+  const document = parseDocument(source);
+  expect(document.errors).toEqual([]);
+
+  let actionCount = 0;
+  visit(document, {
+    Pair(_, { key, value }) {
+      if (!isScalar(key) || key.value !== 'uses') return;
+
+      actionCount++;
+      expect(isScalar(value) && typeof value.value === 'string' ? value.value : '')
+        .toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
+
+      const valueEnd = isScalar(value) ? value.range?.[1] : undefined;
+      const lineSuffix = valueEnd === undefined ? '' : source.slice(valueEnd).split(/\r?\n/, 1)[0];
+      expect(lineSuffix).toMatch(/^[ \t]+#[ \t]*v\d+\.\d+\.\d+[ \t]*$/);
+    },
+  });
+  expect(actionCount).toBeGreaterThan(0);
 }
 
 describe('GitHub Actions permissions', () => {
@@ -37,6 +48,15 @@ describe('GitHub Actions permissions', () => {
     );
     expect(unpinnedWorkflow).not.toBe(workflow);
     expect(() => assertWorkflowActionPins(unpinnedWorkflow)).toThrow();
+  });
+
+  it('rejects an unpinned action with a quoted uses key', () => {
+    const quotedKeyWorkflow = workflow.replace(
+      /- uses: actions\/setup-node@[^\r\n]+/,
+      '- "uses": actions/setup-node@v4 # v4.0.0',
+    );
+    expect(quotedKeyWorkflow).not.toBe(workflow);
+    expect(() => assertWorkflowActionPins(quotedKeyWorkflow)).toThrow(/actions\/setup-node@v4/);
   });
 
   it('pins every third-party action to a full commit SHA with a version comment', () => {
