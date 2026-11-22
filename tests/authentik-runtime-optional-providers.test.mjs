@@ -517,6 +517,37 @@ const findGroupName = (find) => {
 const providerModel = (entry) =>
   entry.kind === 'proxy' ? 'authentik_providers_proxy.proxyprovider' : 'authentik_providers_oauth2.oauth2provider';
 
+function collectEnvNames(node, names = new Set()) {
+  if (Array.isArray(node)) {
+    for (const item of node) collectEnvNames(item, names);
+  } else if (node && typeof node === 'object') {
+    if ('$env' in node) names.add(node.$env);
+    else for (const value of Object.values(node)) collectEnvNames(value, names);
+  }
+  return names;
+}
+
+function assertEmbeddedOutpostProviderParity(blueprint, env, label) {
+  const active = (entry) => (entry.conditions ?? []).every((condition) => Boolean(render(condition, env)));
+  const activeProxyIds = blueprint
+    .filter((entry) => entry.model === 'authentik_providers_proxy.proxyprovider' && active(entry))
+    .map((entry) => entry.id)
+    .sort();
+  const activeOutposts = blueprint.filter((entry) =>
+    entry.model === 'authentik_outposts.outpost' &&
+    entry.identifiers?.name === 'authentik Embedded Outpost' &&
+    active(entry));
+  assert.equal(activeOutposts.length, 1, `${label}: expected exactly one active embedded outpost`);
+
+  const refs = activeOutposts[0].attrs.providers ?? [];
+  const providerIds = refs.map((ref) => {
+    assert.ok(ref && typeof ref.$keyOf === 'string', `${label}: expected a !KeyOf provider reference`);
+    return ref.$keyOf;
+  });
+  assert.equal(new Set(providerIds).size, providerIds.length, `${label}: duplicate provider references`);
+  assert.deepEqual(providerIds.sort(), activeProxyIds, `${label}: outpost provider IDs differ from active proxy providers`);
+}
+
 function blueprintFor(entry) {
   const providers = BLUEPRINT.filter((item) => item.model === providerModel(entry) && item.identifiers?.name === entry.providerName);
   assert.equal(providers.length, 1, `${entry.key}: expected one blueprint provider`);
@@ -534,6 +565,41 @@ function blueprintFor(entry) {
   };
   return { provider, application, bindings, byId };
 }
+
+test('embedded outpost provider membership matches active proxy providers for every host combination', () => {
+  const conditionalEntries = BLUEPRINT.filter((entry) =>
+    entry.model === 'authentik_providers_proxy.proxyprovider' ||
+    entry.model === 'authentik_outposts.outpost');
+  const hostVariables = [...new Set(conditionalEntries.flatMap((entry) => [...collectEnvNames(entry.conditions)]))].sort();
+  assert.ok(hostVariables.length > 0, 'expected conditional provider/outpost host variables');
+  // Keep exhaustive coverage bounded if future blueprint conditions add variables.
+  assert.ok(hostVariables.length <= 12, `too many host-variable combinations to enumerate: ${hostVariables.length}`);
+
+  for (let mask = 0; mask < 2 ** hostVariables.length; mask += 1) {
+    const enabled = hostVariables.filter((_, bit) => mask & (1 << bit));
+    const env = Object.fromEntries(enabled.map((name) => [name, 'synthetic.example.test']));
+    assertEmbeddedOutpostProviderParity(BLUEPRINT, env, `enabled host variables: ${enabled.join(', ') || 'none'}`);
+  }
+});
+
+test('outpost parity check detects a missing Metrics provider reference', () => {
+  const env = {
+    PORTAL_TEST_EXTERNAL_HOST: 'test.synthetic.example',
+    PORTAL_METRICS_EXTERNAL_HOST: 'metrics.synthetic.example',
+  };
+  assert.doesNotThrow(() => assertEmbeddedOutpostProviderParity(BLUEPRINT, env, 'baseline Test + Metrics outpost'));
+
+  const brokenBlueprint = structuredClone(BLUEPRINT);
+  const outpost = brokenBlueprint.find((entry) => entry.id === 'portal-test-metrics-outpost');
+  assert.ok(outpost, 'expected the Test + Metrics outpost fixture');
+  assert.ok(Array.isArray(outpost.attrs.providers), 'expected the Test + Metrics outpost provider list');
+  outpost.attrs.providers = outpost.attrs.providers.filter((ref) => ref.$keyOf !== 'portal-metrics-provider');
+
+  assert.throws(
+    () => assertEmbeddedOutpostProviderParity(brokenBlueprint, env, 'mutated Test + Metrics outpost'),
+    /outpost provider IDs differ from active proxy providers/,
+  );
+});
 
 test('spec enable conditions and required settings match the blueprint', () => {
   const source = readFileSync(BLUEPRINT_PATH, 'utf8');
