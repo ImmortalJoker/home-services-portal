@@ -118,10 +118,14 @@ def build_world(world):
     for entry in world['scopeMappings']:
         mappings[entry['pk']] = ScopeMapping(**entry)
         ScopeMapping.objects.items.append(mappings[entry['pk']])
-    # Non-scope property mappings (e.g. proxy host-header mappings) are not
-    # visible through ScopeMapping.objects.
+    # Proxy host-header mappings are ScopeMapping rows too; keep explicit
+    # non-scope fixtures available for fail-closed coverage.
     for entry in world.get('propertyMappings', []):
-        mappings[entry['pk']] = PropertyMapping(**entry)
+        if 'scope_name' in entry:
+            mappings[entry['pk']] = ScopeMapping(**entry)
+            ScopeMapping.objects.items.append(mappings[entry['pk']])
+        else:
+            mappings[entry['pk']] = PropertyMapping(**entry)
     groups = {}
     for entry in world['groups']:
         groups[entry['name']] = Group(pk=entry['name'], name=entry['name'], attributes=entry['attributes'])
