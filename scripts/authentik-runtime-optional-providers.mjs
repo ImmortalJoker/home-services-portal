@@ -380,6 +380,12 @@ def portal_verify_proxy(spec, provider, outpost):
             'property mapping expression mismatch for ' + mapping['name'],
         )
     portal_require(mapping_names == {mapping['name'] for mapping in spec['propertyMappings']}, key, 'unexpected property mappings')
+    if basic:
+        portal_require(
+            'goauthentik.io/providers/proxy/scope-proxy' in known_managed_ids,
+            key,
+            'missing required managed proxy mapping for upstream basic auth',
+        )
     portal_require(outpost.providers.filter(pk=provider.pk).exists(), key, 'provider not assigned to the embedded outpost')
 
 

@@ -330,6 +330,17 @@ test('Transmission credentials copied onto a non-Owner group fail', () => {
   expectFail(env, world, /transmission: upstream credentials present on Portal - Family$/);
 });
 
+test('Transmission rejects a missing managed proxy mapping required for upstream Basic Auth', () => {
+  const env = envFor(['transmission']);
+  const world = buildWorld(env);
+  const provider = providerOf(world, 'transmission');
+  provider.property_mappings = [
+    ...MANAGED_PROXY_SCOPE_MAPPINGS.filter((mapping) => mapping.pk !== 'managed-proxy').map(({ pk }) => pk),
+    'map-transmission-host',
+  ];
+  expectFail(env, world, /transmission: missing required managed proxy mapping for upstream basic auth$/);
+});
+
 test('Transmission proxy drift fails closed', () => {
   const env = envFor(['transmission']);
   const cases = [
