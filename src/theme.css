@@ -60,6 +60,25 @@
   color-scheme: dark;
 }
 
+/* Icon-only theme action; override the shared button sizing, not its states. */
+#root button.theme-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  gap: 0;
+}
+
+#root button.theme-control svg {
+  display: block;
+  flex: none;
+}
+
 /* Use the OS canvas while the external entry module resolves the saved choice. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {

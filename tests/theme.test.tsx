@@ -1,6 +1,11 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PortalApp } from '../src/PortalApp';
+import userEvent from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
+
+const themeCss = readFileSync('src/theme.css', 'utf8');
+const controlCss = readFileSync('src/style.css', 'utf8');
 
 const preferenceKey = 'home-services-portal:theme';
 
@@ -13,8 +18,10 @@ function systemTheme(dark: boolean) {
   };
 }
 
-const control = () => screen.getByRole<HTMLSelectElement>('combobox', { name: 'Theme' });
-const choose = (value: string) => fireEvent.change(control(), { target: { value } });
+const control = () => screen.getByRole<HTMLButtonElement>('button', { name: /Switch to (light|dark) theme/ });
+const choose = (value: 'light' | 'dark') => {
+  if (theme() !== value) fireEvent.click(control());
+};
 const theme = () => document.documentElement.dataset.theme;
 
 beforeEach(() => {
@@ -31,26 +38,92 @@ afterEach(() => {
   localStorage.clear();
 });
 
-it('defaults to System, follows OS changes and stops following during an override', () => {
+it('offers an icon-only action button that toggles and saves explicit themes', () => {
+  systemTheme(false);
+  render(<PortalApp />);
+  const button = screen.getByRole('button', { name: 'Switch to dark theme' });
+  expect(button.getAttribute('type')).toBe('button');
+  expect(button.getAttribute('title')).toBe('Switch to dark theme');
+  expect(button.textContent).toBe('');
+  expect(screen.queryByText('Theme')).toBeNull();
+  expect(screen.queryByRole('combobox', { name: 'Theme' })).toBeNull();
+  const moon = button.querySelector('svg');
+  expect(moon?.getAttribute('aria-hidden')).toBe('true');
+  expect(moon?.getAttribute('focusable')).toBe('false');
+  expect(moon?.querySelector('path')).not.toBeNull();
+  expect(localStorage.getItem(preferenceKey)).toBeNull();
+
+  fireEvent.click(button);
+  expect(theme()).toBe('dark');
+  expect(localStorage.getItem(preferenceKey)).toBe('dark');
+  expect(screen.getByRole('button', { name: 'Switch to light theme' })).toBe(button);
+  expect(button.getAttribute('title')).toBe('Switch to light theme');
+  expect(button.querySelector('svg circle')).not.toBeNull();
+
+  fireEvent.click(button);
+  expect(theme()).toBe('light');
+  expect(localStorage.getItem(preferenceKey)).toBe('light');
+  expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBe(button);
+});
+
+it('defaults to System and updates the action icon with OS changes until clicked', () => {
   const changeSystem = systemTheme(true);
   render(<PortalApp />);
-  expect(control().value).toBe('system');
+  const button = screen.getByRole('button', { name: 'Switch to light theme' });
+  expect(button.querySelector('svg circle')).not.toBeNull();
   expect(theme()).toBe('dark');
   expect(localStorage.length).toBe(0);
   changeSystem(false);
   expect(theme()).toBe('light');
-  choose('dark');
-  expect(theme()).toBe('dark');
+  expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBe(button);
+  expect(button.getAttribute('title')).toBe('Switch to dark theme');
+  expect(button.querySelector('svg circle')).toBeNull();
+  expect(localStorage.length).toBe(0);
   changeSystem(true);
-  changeSystem(false);
   expect(theme()).toBe('dark');
-  expect(localStorage.getItem(preferenceKey)).toBe('dark');
-  expect(localStorage.length).toBe(1);
-  choose('system');
+  expect(screen.getByRole('button', { name: 'Switch to light theme' })).toBe(button);
+  expect(button.querySelector('svg circle')).not.toBeNull();
+  fireEvent.click(button);
   expect(theme()).toBe('light');
-  expect(localStorage.getItem(preferenceKey)).toBeNull();
+  changeSystem(false);
   changeSystem(true);
+  expect(theme()).toBe('light');
+  expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBe(button);
+  expect(localStorage.getItem(preferenceKey)).toBe('light');
+  expect(localStorage.length).toBe(1);
+});
+
+it('keeps the icon button compact with the application stylesheet cascade', () => {
+  systemTheme(false);
+  const styles = document.createElement('style');
+  styles.textContent = `${themeCss}\n${controlCss}`;
+  document.head.append(styles);
+  try {
+    render(<div id="root"><PortalApp /></div>);
+    const style = getComputedStyle(control());
+    expect(style.width).toBe('40px');
+    expect(style.height).toBe('40px');
+    expect(style.minHeight).toBe('40px');
+    expect(style.padding).toBe('0px');
+  } finally {
+    styles.remove();
+  }
+});
+
+it('supports native keyboard focus and Enter/Space activation', async () => {
+  systemTheme(false);
+  const user = userEvent.setup();
+  render(<PortalApp />);
+  await user.tab();
+  await user.tab();
+  const button = control();
+  expect(document.activeElement).toBe(button);
+  await user.keyboard('{Enter}');
   expect(theme()).toBe('dark');
+  expect(document.activeElement).toBe(button);
+  await user.keyboard(' ');
+  expect(theme()).toBe('light');
+  expect(localStorage.getItem(preferenceKey)).toBe('light');
 });
 
 it('restores the saved light override on remount even when the OS prefers dark', () => {
@@ -59,7 +132,7 @@ it('restores the saved light override on remount even when the OS prefers dark',
   choose('light');
   first.unmount();
   render(<PortalApp />);
-  expect(control().value).toBe('light');
+  expect(control().getAttribute('aria-label')).toBe('Switch to dark theme');
   expect(theme()).toBe('light');
 });
 
@@ -67,11 +140,11 @@ it('ignores invalid preferences and supports overrides without matchMedia', () =
   localStorage.setItem(preferenceKey, 'invalid');
   vi.stubGlobal('matchMedia', undefined);
   render(<PortalApp />);
-  expect(control().value).toBe('system');
   expect(theme()).toBe('light');
+  expect(control().getAttribute('aria-label')).toBe('Switch to dark theme');
   choose('dark');
   expect(theme()).toBe('dark');
-  choose('system');
+  choose('light');
   expect(theme()).toBe('light');
 });
 
@@ -79,11 +152,11 @@ it('keeps working when accessing storage throws', () => {
   systemTheme(true);
   vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => { throw new Error('blocked'); });
   render(<PortalApp />);
-  expect(control().value).toBe('system');
   expect(theme()).toBe('dark');
+  expect(control().getAttribute('aria-label')).toBe('Switch to light theme');
   choose('light');
   expect(theme()).toBe('light');
-  choose('system');
+  choose('dark');
   expect(theme()).toBe('dark');
 });
 
