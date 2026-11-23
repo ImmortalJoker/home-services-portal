@@ -21,5 +21,8 @@ it('returns a generic non-cached offline page only when portal navigation fails'
   const offline = await response;
   assert.equal(offline.status, 503);
   assert.equal(offline.headers.get('Cache-Control'), 'no-store');
-  assert.match(await offline.text(), /home Wi-Fi or Tailscale/);
+  const html = await offline.text();
+  assert.match(html, /home Wi-Fi or Tailscale/);
+  assert.match(html, /color-scheme: light/);
+  assert.match(html, /prefers-color-scheme: dark/);
 });

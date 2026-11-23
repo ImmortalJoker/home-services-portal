@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ServiceItem } from './config';
 import './system-status-widget.css';
 
@@ -19,7 +19,7 @@ interface SystemStatus {
 type StatusView =
   | { state: 'loading' }
   | { state: 'loaded'; status: SystemStatus; stale: boolean }
-  | { state: 'error' };
+  | { state: 'error'; accessDenied?: boolean };
 
 function isSystemStatus(value: unknown): value is SystemStatus {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -55,28 +55,43 @@ function formatUptime(seconds: number): string {
   return `${minutes}m`;
 }
 
-function MetricMeter({ label, percent, detail }: { label: string; percent: number; detail: string }) {
-  const rounded = Math.round(percent);
+function Skeleton({ className = '' }: { className?: string }) {
+  return <span className={`status-skeleton ${className}`} aria-hidden="true" />;
+}
+
+function MetricMeter({ label, percent, detail, loading }: {
+  label: string; percent?: number; detail?: string; loading: boolean;
+}) {
   return (
     <div className="status-meter">
-      <div className="status-meter-heading"><span>{label}</span><strong>{rounded}%</strong></div>
-      <progress max={100} value={Math.min(100, Math.max(0, percent))} aria-label={`${label} usage`} />
-      <small>{detail}</small>
+      <div className="status-meter-heading">
+        <span>{label}</span>
+        {percent === undefined ? loading && <Skeleton /> : <strong>{Math.round(percent)}%</strong>}
+      </div>
+      {percent === undefined ? <span className="status-meter-empty-track" aria-hidden="true">{loading && <Skeleton />}</span> :
+        <progress max={100} value={Math.min(100, Math.max(0, percent))} aria-label={`${label} usage`} />}
+      <small>{detail ?? (loading && <Skeleton className="status-skeleton-detail" />)}</small>
     </div>
   );
 }
 
 export function SystemStatusWidget({ service }: { service: ServiceItem }) {
+  return <SystemStatusReading key={JSON.stringify([service.id, service.url])} service={service} />;
+}
+
+function SystemStatusReading({ service }: { service: ServiceItem }) {
   const [view, setView] = useState<StatusView>({ state: 'loading' });
-  const [refreshIndex, setRefreshIndex] = useState(0);
+  const refresh = useRef<() => void>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
+    let inFlight = false;
 
     async function load() {
-      // Keep the last reading visible while polling; only show the loading state before any data exists.
+      if (inFlight) return;
+      inFlight = true;
       setRefreshing(true);
       setView((current) => current.state === 'loaded' ? current : { state: 'loading' });
       try {
@@ -84,9 +99,14 @@ export function SystemStatusWidget({ service }: { service: ServiceItem }) {
         const response = await fetch(apiUrl, {
           headers: { Accept: 'application/json' },
           cache: 'no-store',
+          redirect: 'manual',
           signal: controller.signal,
         });
         if (!active) return;
+        if (response.status === 401 || response.status === 403 || response.type === 'opaqueredirect') {
+          setView({ state: 'error', accessDenied: true });
+          return;
+        }
         if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) {
           throw new Error('System status request failed.');
         }
@@ -97,49 +117,64 @@ export function SystemStatusWidget({ service }: { service: ServiceItem }) {
       } catch {
         if (active) setView((current) => current.state === 'loaded' ? { ...current, stale: true } : { state: 'error' });
       } finally {
+        inFlight = false;
         if (active) setRefreshing(false);
       }
     }
 
+    refresh.current = load;
     void load();
     const interval = window.setInterval(() => { if (!document.hidden) void load(); }, 15000);
     const visible = () => { if (!document.hidden) void load(); };
     document.addEventListener('visibilitychange', visible);
     return () => {
       active = false;
+      refresh.current = null;
       controller.abort();
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', visible);
     };
-  }, [refreshIndex]);
+  }, []);
+
+  const status = view.state === 'loaded' ? view.status : undefined;
+  const loading = view.state === 'loading';
 
   return (
     <section className="system-status-card" aria-label={service.name}>
       <header className="system-status-header">
         <div>
-          <span className="system-status-kicker">OWNER · LIVE STATUS</span>
+          <span className="system-status-kicker">OWNER · SYSTEM METRICS</span>
           <h3>{service.name}</h3>
           {service.description && <p>{service.description}</p>}
         </div>
-        <button className="system-status-refresh" type="button" onClick={() => setRefreshIndex((value) => value + 1)} disabled={refreshing}>
-          {refreshing ? 'Loading…' : 'Refresh'}
+        <button className="system-status-refresh" type="button" onClick={() => refresh.current?.()} disabled={refreshing}>
+          Refresh
         </button>
       </header>
 
-      {view.state === 'loading' && <p className="system-status-message" role="status">Loading system status…</p>}
-      {view.state === 'error' && <p className="system-status-message" role="alert">System status is unavailable. Refresh to try again.</p>}
-      {view.state === 'loaded' && view.stale && <p className="system-status-message" role="status">The latest update failed; showing the previous reading.</p>}
-      {view.state === 'loaded' && <>
-        <div className="system-status-meters">
-          <MetricMeter label="CPU" percent={view.status.cpu_percent} detail={`${view.status.logical_cores} logical cores`} />
-          <MetricMeter label="Memory" percent={view.status.memory_percent} detail={`${formatBytes(view.status.memory_used_bytes)} of ${formatBytes(view.status.memory_total_bytes)}`} />
-          <MetricMeter label="Disk" percent={view.status.disk_percent} detail={`${formatBytes(view.status.disk_free_bytes)} free of ${formatBytes(view.status.disk_total_bytes)}`} />
-        </div>
-        <div className="system-status-footer">
-          <span>Load {view.status.load_1m.toFixed(2)} · Uptime {formatUptime(view.status.uptime_seconds)}</span>
-          <span>Updated {new Date(view.status.updated_at * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
-        </div>
-      </>}
+      <div className="system-status-message" data-stale={view.state === 'loaded' && view.stale}>
+        {view.state === 'error' ? (
+          <span role="alert">{view.accessDenied
+            ? 'System status access was denied. Check your sign-in and refresh.'
+            : 'System status is unavailable. Refresh to try again.'}</span>
+        ) : (
+          <span role="status">
+            {loading && 'Loading system status…'}
+            {view.state === 'loaded' && (view.stale
+              ? (refreshing ? 'Updating… Previous reading is stale.' : 'The latest update failed; showing the previous reading.')
+              : (refreshing ? 'Updating… Showing the previous reading.' : ''))}
+          </span>
+        )}
+      </div>
+      <div className="system-status-meters">
+        <MetricMeter label="CPU" loading={loading} percent={status?.cpu_percent} detail={status && `${status.logical_cores} logical cores`} />
+        <MetricMeter label="Memory" loading={loading} percent={status?.memory_percent} detail={status && `${formatBytes(status.memory_used_bytes)} of ${formatBytes(status.memory_total_bytes)}`} />
+        <MetricMeter label="Disk" loading={loading} percent={status?.disk_percent} detail={status && `${formatBytes(status.disk_free_bytes)} free of ${formatBytes(status.disk_total_bytes)}`} />
+      </div>
+      <div className="system-status-footer">
+        <span><span>Load</span> {status ? status.load_1m.toFixed(2) : loading && <Skeleton />} · <span>Uptime</span> {status ? formatUptime(status.uptime_seconds) : loading && <Skeleton />}</span>
+        <span><span>Updated</span> {status ? <span>{new Date(status.updated_at * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span> : loading && <Skeleton />}</span>
+      </div>
       <a className="system-status-raw-link" href={service.url} target="_blank" rel="noreferrer">View raw JSON ↗</a>
     </section>
   );

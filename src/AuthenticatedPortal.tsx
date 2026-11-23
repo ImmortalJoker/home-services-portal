@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ThemeControl } from './ThemeControl';
 import { Portal } from './Portal';
 import type { PortalConfig } from './config';
 import { validateConfig } from './config';
@@ -88,22 +89,31 @@ export function AuthenticatedPortal() {
   }
   if (view.state === 'expired') {
     // A full-page navigation lets Authentik run its sign-in flow and return here.
-    return <main className="shell auth-state" role="alert">
-      <h1>Your session has ended</h1>
-      <p>Sign in again to continue to your household services.</p>
-      <p><a href={window.location.href}>Sign in again</a></p>
+    return <main className="shell auth-state">
+      <div role="alert">
+        <h1>Your session has ended</h1>
+        <p>Sign in again to continue to your household services.</p>
+        <p><a href={window.location.href}>Sign in again</a></p>
+      </div>
+      <ThemeControl />
     </main>;
   }
   if (view.state === 'denied') {
-    return <main className="shell auth-state" role="alert">
-      <h1>Portal access unavailable</h1>
-      <p>This account is not assigned to an access group for this portal. Ask the owner to grant access.</p>
+    return <main className="shell auth-state">
+      <div role="alert">
+        <h1>Portal access unavailable</h1>
+        <p>This account is not assigned to an access group for this portal. Ask the owner to grant access.</p>
+      </div>
+      <ThemeControl />
     </main>;
   }
   if (view.state === 'error') {
-    return <main className="shell auth-state" role="alert">
-      <h1>Could not load your portal</h1>
-      <p>Refresh the page. If the problem continues, ask the owner to check the portal service.</p>
+    return <main className="shell auth-state">
+      <div role="alert">
+        <h1>Could not load your portal</h1>
+        <p>Refresh the page. If the problem continues, ask the owner to check the portal service.</p>
+      </div>
+      <ThemeControl />
     </main>;
   }
   return <Portal config={view.config} identity={view.identity} connection={view.connection} />;

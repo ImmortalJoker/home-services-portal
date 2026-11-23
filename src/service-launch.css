@@ -1,30 +1,272 @@
-.service-grid.portal-tiles{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:16px;align-items:stretch}
-.service-tile{min-width:0;display:flex;flex-direction:column;border:1px solid #29374d;border-radius:18px;background:#182337;overflow:hidden;transition:border-color .18s,background .18s}
-.service-tile:hover{border-color:#60799e;background:#1c2a40}
-.service-tile .service-card{border:0;border-radius:0;background:transparent;min-height:154px;padding:24px 12px 18px;flex:1;flex-direction:column;justify-content:center;gap:16px;text-align:center}
-.service-tile .service-card:hover,.service-tile .service-card:focus-visible{transform:none;background:#1c2a40}
-.service-tile .service-card:focus-visible{outline:2px solid #85a7ed;outline-offset:-4px;border-radius:16px}
-.service-tile .card-mark{width:52px;height:52px;border-radius:15px;flex:none}
-.service-tile .card-mark svg{width:28px;height:28px}
-.service-tile .card-copy strong{font-size:1rem;line-height:1.35;overflow-wrap:anywhere}
-.service-launch-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:0 12px;padding:0 8px 8px;min-height:52px}
-.service-launch-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:0 8px;text-decoration:none;font-size:.875rem;font-weight:600}
-.service-launch-app{color:#a3dfc1}.service-launch-web{color:#c4d1e6}
-.service-launch-actions a:focus-visible{outline:2px solid #85a7ed;outline-offset:0;border-radius:6px}
-.service-launch-actions a:hover{text-decoration:underline;text-underline-offset:3px}
-.portal-install{margin-top:18px}.portal-install button{min-height:44px;padding:9px 16px;border:1px solid #405572;border-radius:10px;background:#182337;color:#c4d1e6;font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer}
-.portal-install button:focus-visible{outline:2px solid #85a7ed;outline-offset:3px}
-.hero .portal-install .install-help{max-width:480px;margin:12px 0 0;padding:16px;border:1px solid #34425a;border-radius:12px;background:#182337;color:#c4d1e6;font:400 .95rem/1.6 system-ui}
-@media(max-width:600px){.service-grid.portal-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.service-tile .service-card{min-height:140px;padding:20px 8px 16px}.service-tile .card-copy strong{font-size:.9375rem}.shell .hero{padding-top:8px;padding-bottom:30px}.shell .hero h1{font-size:clamp(2rem,9vw,3rem)}.shell .identity-badge{max-width:100%;border-radius:14px}.identity-copy{min-width:0}.identity-copy strong{overflow-wrap:anywhere}.identity-avatar{flex-shrink:0}.identity-signout{display:inline-flex;align-items:center;min-height:44px}.portal-tiles .system-status-card{grid-column:1/-1}}
-@media(prefers-reduced-motion:reduce){.service-tile{transition:none}}
-.metrics-tile:not([open]){display:block}.metrics-tile summary.service-card{cursor:pointer;list-style:none;min-height:100%;height:100%;margin:0}.metrics-tile summary::-webkit-details-marker{display:none}.metrics-tile[open]{grid-column:1/-1}.metrics-tile[open] summary.service-card{min-height:120px;height:auto}.metrics-tile .system-status-card{border:0;border-top:1px solid #34445d;border-radius:0;background:transparent}
-.shell>.system-status-card{margin-bottom:24px}
-.app-recommendations{margin:44px 0 36px;padding-top:28px;border-top:1px solid #29374d}.recommendations-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}.recommendations-heading h2{font-size:1.25rem;margin:0 0 8px}.recommendations-heading p,.recommendations-note{font-size:.875rem;color:#9ba8bd;line-height:1.6;margin:0}.platform-switch{display:flex;gap:4px;padding:4px;border:1px solid #34425a;border-radius:12px;background:#142033}.platform-switch button{min-height:44px;border:0;border-radius:8px;background:transparent;color:#aebbd0;padding:8px 14px;font:inherit;font-size:.875rem;cursor:pointer}.platform-switch button[aria-pressed=true]{color:#e8edf6;background:#304867}.platform-switch button:focus-visible{outline:2px solid #85a7ed}.recommended-apps{list-style:none;padding:0;margin:24px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:22px}.recommended-apps li{min-width:0}.recommendation-purpose{display:block;color:#8897ad;font-size:.8125rem;margin-bottom:4px}.recommended-apps a{display:inline-flex;align-items:center;min-height:44px;color:#a3dfc1;font-size:1rem;font-weight:600;text-underline-offset:4px}.recommended-apps p{margin:5px 0 0;color:#9ba8bd;font-size:.875rem;line-height:1.6}.recommendations-note{font-size:.8125rem}
-.transmission-card-top{display:flex;flex-direction:column;height:100%}.transmission-tile .service-card{min-height:125px;padding-bottom:10px;flex:0}.transmission-stats{display:flex;align-items:center;flex-direction:column;gap:6px;padding:0 10px 14px;font-size:.8125rem;line-height:1.5;color:#9ba8bd;text-align:center;min-height:80px}.transmission-stats strong{color:#c4d1e6;font-weight:500}.transmission-speeds{font-size:.75rem;overflow-wrap:anywhere}.transmission-expand{margin-top:auto;min-height:44px;width:100%;display:flex;align-items:center;justify-content:center;gap:12px;border:0;border-top:1px solid #29374d;background:transparent;color:#a3dfc1;font:inherit;font-size:.875rem;cursor:pointer}.transmission-expand svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7}.transmission-expand[aria-expanded=true] svg{transform:rotate(180deg)}.transmission-expand:focus-visible{outline:2px solid #85a7ed;outline-offset:-4px}.transmission-expanded{grid-column:1/-1}.transmission-expanded .transmission-card-top{height:auto;display:grid;grid-template-columns:1fr 1fr;align-items:center}.transmission-expanded .transmission-expand{grid-column:1/-1}.transmission-panel{border-top:1px solid #34425a;background:#142033}.transmission-panel-heading{padding:16px;display:flex;align-items:center;gap:16px;justify-content:space-between}.transmission-panel-heading p{font-size:.875rem;line-height:1.6;color:#9ba8bd;margin:0}.transmission-panel-heading a{color:#c4d1e6;text-underline-offset:3px}.transmission-panel-heading button{min-height:44px;flex:none;border:1px solid #405572;border-radius:8px;background:#20324a;color:#e8edf6;padding:8px 12px;cursor:pointer}.transmission-panel iframe{display:block;width:100%;height:70vh;min-height:430px;max-height:720px;border:0;background:#fff}@media(max-width:600px){.recommendations-heading{align-items:flex-start;gap:16px}.recommended-apps{grid-template-columns:1fr 1fr;gap:22px 16px}.platform-switch{width:100%}.platform-switch button{flex:1}.transmission-panel-heading{flex-direction:column;align-items:flex-start}.transmission-stats{padding-left:6px;padding-right:6px}.transmission-panel iframe{min-height:430px}}
-.shell .portal-header{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:8px 0 28px;margin:0}.portal-heading{min-width:0;flex:1}.portal-title-line{display:flex;align-items:center;gap:10px;min-width:0}.shell .portal-header h1{font-size:1.75rem;line-height:1.2;letter-spacing:-.8px;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.portal-header .portal-heading>p{font-size:.875rem;line-height:1.5;margin:7px 0 0;color:#9ba8bd}.connection-indicator{display:inline-flex;flex:none;padding:4px}.connection-indicator>span{display:block;width:9px;height:9px;border-radius:50%;background:#8897ad}.connection-local>span{background:#70e0b0;box-shadow:0 0 12px #70e0b033}.connection-tailscale>span{background:#8db9ff;box-shadow:0 0 12px #8db9ff33}.connection-label{font-size:.75rem;white-space:nowrap;color:#9ba8bd}.portal-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex:none}.portal-header .identity-badge{margin:0;padding:5px 10px 5px 6px;border-radius:12px;max-width:290px}.portal-header .identity-copy strong{max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.portal-header .portal-install{margin:0;position:relative;flex:none}.portal-header .portal-install .install-help{position:absolute;right:0;top:100%;width:min(330px,calc(100vw - 40px));z-index:5;box-shadow:0 12px 40px #0005}.portal-header .identity-signout{min-height:44px;display:inline-flex;align-items:center}.transmission-tile{grid-column:1/-1}.transmission-tile .transmission-card-top{height:auto;display:grid;grid-template-columns:minmax(160px,1fr) minmax(160px,2fr);align-items:center}.transmission-tile .service-card{min-height:120px;flex-direction:row;gap:14px;justify-content:flex-start;padding:20px 24px;text-align:left}.transmission-tile .transmission-stats{flex-direction:row;flex-wrap:wrap;justify-content:flex-end;gap:12px 24px;padding:18px 24px;text-align:right;min-height:0}.transmission-tile .transmission-expand{grid-column:1/-1}.recommended-apps{grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 24px}.recommended-apps>li{border:1px solid #29374d;border-radius:14px;padding:20px;background:#142033}.recommended-apps h3{font-size:1rem;margin:12px 0;color:#c4d1e6}.recommended-apps ol{padding-left:20px;margin:10px 0 16px;color:#aebbd0;font-size:.875rem;line-height:1.65}.recommended-apps ol li{padding-left:3px;margin:6px 0}.recommendations-heading+.recommendations-note{margin-top:16px}.guide-connection{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}.guide-connection label{display:grid;gap:7px;font-size:.75rem;color:#9ba8bd;min-width:0;flex:1 1 180px}.guide-connection input{width:100%;min-width:0;min-height:44px;border:1px solid #405572;border-radius:8px;background:#101827;color:#c4d1e6;padding:10px;font:12px/1.4 ui-monospace,monospace}.guide-connection button{min-height:44px;padding:8px 12px;border:1px solid #405572;border-radius:8px;background:#20324a;color:#e8edf6;font-family:inherit;cursor:pointer}.guide-connection small{width:100%;color:#9ba8bd}.guide-connection input:focus-visible,.guide-connection button:focus-visible{outline:2px solid #85a7ed;outline-offset:2px}@media(max-width:900px){.shell .portal-header{align-items:flex-start;flex-wrap:wrap;gap:16px}.portal-heading{flex-basis:100%}.portal-header-actions{justify-content:flex-start;max-width:100%}}@media(max-width:600px){.shell{padding-top:24px}.shell .portal-header h1{font-size:1.5rem}.portal-header-actions{width:100%;justify-content:space-between;gap:8px}.portal-header .identity-badge{max-width:calc(100% - 120px)}.portal-header .identity-copy strong{max-width:130px}.portal-header .identity-copy{min-width:0}.portal-header .identity-signout{margin-left:4px;font-size:.6875rem}.portal-header .identity-avatar{width:28px;height:28px}.connection-label{font-size:.6875rem}.recommended-apps{grid-template-columns:1fr}.transmission-tile .transmission-card-top{grid-template-columns:1fr}.transmission-tile .service-card{padding-bottom:8px;min-height:96px}.transmission-tile .transmission-stats{justify-content:flex-start;text-align:left;padding:8px 24px 18px;gap:8px 16px}.portal-header .identity-copy strong{white-space:normal;overflow-wrap:anywhere}}
-@media(max-width:380px){.portal-header .identity-avatar{display:none}.portal-header .identity-badge{max-width:calc(100% - 92px);flex:1}.portal-header .identity-copy strong{white-space:normal;max-width:none}.portal-header .identity-copy small,.portal-header .identity-signout{white-space:nowrap}.portal-header .install-context{display:none}.portal-header .portal-install button{padding:9px 12px}}
-/* Keep the header in a single row; account details move into an avatar disclosure. */
-.identity-menu-toggle,.identity-mobile-menu{display:none}.portal-header .identity-badge{position:relative}
-@media(max-width:900px){.shell .portal-header{flex-wrap:nowrap;align-items:center;gap:12px}.portal-heading{flex:1 1 auto;min-width:0}.portal-header-actions{width:auto;flex:none;max-width:none;gap:8px}.portal-header .portal-heading>p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
-@media(max-width:700px){.portal-header .identity-copy,.portal-header .identity-badge>.identity-signout,.portal-header .identity-badge>.identity-avatar{display:none}.portal-header .identity-badge{padding:0;border:0;background:transparent;border-radius:12px;max-width:none;flex:none}.portal-header .identity-menu-toggle{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:0;border:1px solid #405572;border-radius:12px;background:#20324a;color:#d4e4ff;font:600 1rem system-ui;cursor:pointer}.identity-menu-toggle:focus-visible{outline:2px solid #85a7ed;outline-offset:3px}.portal-header .identity-mobile-menu{display:grid;gap:8px;position:absolute;right:0;top:calc(100% + 10px);z-index:20;width:220px;padding:16px;border:1px solid #405572;border-radius:12px;background:#182337;box-shadow:0 12px 40px #0006}.identity-mobile-menu strong{font-size:.875rem;overflow-wrap:anywhere}.identity-mobile-menu small{font-size:.75rem;color:#9ba8bd}.identity-mobile-menu a{display:flex;align-items:center;min-height:44px;color:#d4e4ff;font-size:.875rem;text-underline-offset:3px}.portal-header .install-context{display:none}.portal-header .portal-install button{padding:9px 12px;white-space:nowrap}}
-@media(max-width:600px){.shell .portal-header{gap:8px}.shell .portal-header h1{font-size:1.0625rem;letter-spacing:-.4px}.portal-title-line{gap:7px}.portal-header .connection-label{display:none}.portal-header .portal-heading>p{font-size:.6875rem;line-height:1.5;margin-top:5px}.portal-header .connection-indicator{padding:2px}.portal-header .connection-indicator>span{width:8px;height:8px}}
+.portal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed var(--portal-border);
+}
+
+.portal-heading { min-width: 0; }
+.portal-title-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+
+.portal-header h1 {
+  min-width: 0;
+  margin: 0;
+  font: 400 clamp(1.75rem, 4vw, 2.5rem)/1 var(--portal-display-font);
+  overflow-wrap: anywhere;
+}
+
+.portal-heading > p { margin: 6px 0 0; color: var(--portal-muted); font-size: .875rem; }
+
+.connection-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--portal-control-border);
+  border-radius: 999px;
+  color: var(--portal-muted);
+  font: .6875rem var(--portal-mono-font);
+}
+
+.connection-indicator {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--portal-muted);
+}
+
+.connection-local { background: var(--portal-success); }
+.connection-tailscale { background: var(--portal-link); }
+
+.portal-header-actions {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.portal-install button { white-space: nowrap; }
+
+.install-help {
+  position: absolute;
+  inset-inline-end: 0;
+  z-index: 5;
+  width: min(330px, calc(100vw - 2 * var(--portal-gutter)));
+  padding: 14px;
+  margin: 8px 0 0;
+  border: 1px solid var(--portal-border);
+  border-radius: var(--portal-radius);
+  background: var(--portal-surface);
+  color: var(--portal-text);
+  box-shadow: var(--portal-shadow);
+  font-size: .875rem;
+}
+
+.service-grid.portal-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 168px), 1fr));
+  gap: 16px;
+}
+
+.service-tile {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--portal-border);
+  border-radius: var(--portal-radius);
+  background: var(--portal-surface);
+  box-shadow: var(--portal-shadow);
+}
+
+#root .service-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 144px;
+  padding: 18px 12px;
+  color: var(--portal-text);
+  text-align: center;
+  text-decoration: none;
+}
+
+#root .service-card:hover { background: var(--portal-hover); }
+#root .service-card:active { background: var(--portal-inset); }
+#root .service-card:focus-visible, #root .transmission-expand:focus-visible { outline-offset: -4px; }
+
+.card-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--portal-control-border);
+  border-radius: var(--portal-control-radius);
+  background: var(--portal-inset);
+  color: var(--portal-text);
+  font: 600 1.125rem var(--portal-heading-font);
+}
+
+.service-card:is(:hover, :focus-visible) .card-mark {
+  border-color: var(--portal-on-accent);
+  background: var(--portal-accent);
+  color: var(--portal-on-accent);
+  box-shadow: -1px 0 var(--portal-red-ghost), 1px 0 var(--portal-blue-ghost);
+}
+
+.card-mark svg { width: 26px; height: 26px; }
+.card-copy { min-width: 0; overflow-wrap: anywhere; }
+.card-copy strong { font-weight: 650; line-height: 1.35; }
+
+.service-launch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 6px;
+  margin: 0 8px;
+  border-top: 1px dashed var(--portal-control-border);
+}
+
+.service-launch-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+#root .service-launch-actions a:focus-visible { outline-offset: -3px; }
+#root .service-launch-app { color: var(--portal-success); }
+
+.app-recommendations { margin: 2.5rem 0 2rem; padding-top: 1.5rem; border-top: 1px dashed var(--portal-border); }
+
+.recommendations-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recommendations-heading h2 { margin: 0 0 4px; font: 600 1.25rem var(--portal-heading-font); }
+.recommendations-heading p, .recommendations-note { margin: 0; color: var(--portal-muted); font-size: .875rem; }
+.recommendations-note { margin-top: 12px; }
+
+.platform-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--portal-border);
+  border-radius: 12px;
+  background: var(--portal-inset);
+}
+
+.platform-switch button { flex: 1; }
+
+.recommended-apps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+
+.recommended-apps > li {
+  min-width: 0;
+  padding: clamp(.875rem, 3vw, 1.25rem);
+  border: 1px solid var(--portal-border);
+  border-radius: var(--portal-radius);
+  background: var(--portal-surface);
+  overflow-wrap: anywhere;
+}
+
+.recommendation-purpose { display: block; color: var(--portal-muted); font: .8125rem var(--portal-mono-font); }
+.recommended-apps a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
+.recommended-apps h3 { margin: 8px 0; font-size: 1rem; }
+.recommended-apps ol { margin: 8px 0 12px; padding-inline-start: 20px; font-size: .875rem; }
+.recommended-apps ol li { margin-block: 6px; }
+
+.guide-connection { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.guide-connection label { display: grid; flex: 1 1 165px; min-width: 0; gap: 4px; color: var(--portal-muted); font-size: .8125rem; }
+.guide-connection input { font-family: var(--portal-mono-font); }
+.guide-connection small { width: 100%; color: var(--portal-warning); }
+
+.transmission-tile { grid-column: 1 / -1; }
+.transmission-card-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: center; }
+#root .transmission-tile .service-card {
+  flex-direction: row;
+  justify-content: flex-start;
+  min-height: 94px;
+  padding-inline: clamp(.875rem, 3vw, 1.5rem);
+  text-align: start;
+}
+
+.transmission-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 20px;
+  padding: 12px clamp(.875rem, 3vw, 1.5rem);
+  color: var(--portal-muted);
+  font-size: .875rem;
+}
+
+.transmission-stats strong { color: var(--portal-text); font-weight: 600; }
+.transmission-error { color: var(--portal-error); }
+.transmission-speeds { overflow-wrap: anywhere; font: .8125rem/1.5 var(--portal-mono-font); }
+
+#root .transmission-expand {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-top: 1px dashed var(--portal-control-border);
+  border-radius: 0;
+}
+
+.transmission-expand svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.transmission-expand[aria-expanded='true'] svg { transform: rotate(180deg); }
+
+.transmission-panel { border-top: 1px solid var(--portal-border); background: var(--portal-inset); }
+.transmission-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; }
+.transmission-panel-heading p { margin: 0; color: var(--portal-muted); font-size: .875rem; }
+.transmission-panel-heading button { flex: none; }
+.transmission-panel iframe { display: block; width: 100%; height: clamp(430px, 70vh, 720px); border: 0; background: var(--portal-surface); }
+
+@media (max-width: 900px) {
+  .portal-header { flex-wrap: wrap; }
+  .portal-heading { flex-basis: 100%; }
+  .portal-header-actions { max-width: 100%; }
+  .install-help { inset-inline: 0 auto; }
+}
+
+@media (max-width: 700px) {
+  .portal-header-actions { width: 100%; }
+  .portal-install .install-context { display: none; }
+}
+
+@media (max-width: 600px) {
+  .service-grid.portal-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  #root .service-card { min-height: 124px; padding: 14px 8px; }
+  .recommended-apps, .transmission-card-top { grid-template-columns: minmax(0, 1fr); }
+  .transmission-stats { justify-content: flex-start; }
+  .transmission-panel-heading { flex-wrap: wrap; }
+}

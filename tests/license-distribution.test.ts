@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
-const fonts = ['OFL-DM-Mono.txt', 'OFL-DM-Sans.txt', 'OFL-Space-Grotesk.txt'];
+const fonts = ['OFL-DM-Mono.txt', 'OFL-DM-Sans.txt', 'OFL-Space-Grotesk.txt', 'OFL-VT323.txt'];
 const notices = [
   ['LICENSE', 'LICENSE.txt'],
   ['NOTICE', 'NOTICE.txt'],
@@ -24,14 +24,14 @@ describe('distributed license notices', () => {
     }
   });
 
-  it('records Fontsource package provenance and SHA-256 digests for every bundled WOFF2 file', () => {
+  it('records Fontsource package provenance and SHA-256 digests for every bundled font', () => {
     const notice = read('NOTICE');
     const woff2 = readdirSync(resolve(root, 'src/assets/fonts')).filter((name) => name.endsWith('.woff2'));
     expect(woff2).toHaveLength(8);
     for (const pkg of ['@fontsource/dm-mono 5.3.0', '@fontsource-variable/dm-sans 5.3.0', '@fontsource-variable/space-grotesk 5.3.0']) {
       expect(notice).toContain(pkg);
     }
-    for (const name of woff2) {
+    for (const name of [...woff2, 'VT323-Regular.ttf']) {
       const digest = createHash('sha256').update(readFileSync(resolve(root, 'src/assets/fonts', name))).digest('hex');
       expect(notice).toMatch(new RegExp(`${name}\\n\\s+${digest}\\n`));
     }
@@ -49,6 +49,8 @@ describe('distributed license notices', () => {
           env: { ...process.env, VITE_BASE_PATH: base, VITE_PORTAL_PUBLIC_DEMO: demo },
           stdio: 'pipe',
         });
+        expect(readFileSync(join(outDir, 'licenses/Glitchtype.txt'), 'utf8'))
+          .toBe(read('public/licenses/Glitchtype.txt'));
         for (const [source, destination] of notices) {
           const expected = read(source);
           expect(readFileSync(join(outDir, destination), 'utf8')).toBe(expected);
