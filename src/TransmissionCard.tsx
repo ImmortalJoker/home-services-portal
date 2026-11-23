@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { ServiceItem } from './config';
 import { ServiceIcon } from './ServiceIcon';
+import { serviceWebTarget } from './service-navigation';
 
 interface Summary { downloading: number; active: number; total: number; percent: number | null; download_bps: number; upload_bps: number }
 function speed(bytes: number) { return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB/s` : `${Math.round(bytes / 1024)} KB/s`; }
 export function TransmissionCard({ service }: { service: ServiceItem }) {
+  const webTarget = serviceWebTarget();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -30,7 +32,7 @@ export function TransmissionCard({ service }: { service: ServiceItem }) {
     return () => { active = false; controller.abort(); window.clearInterval(interval); document.removeEventListener('visibilitychange', visible); };
   }, []);
   return <article className={`service-tile transmission-tile${open ? ' transmission-expanded' : ''}`} aria-label="Transmission">
-    <div className="transmission-card-top"><a className="service-card" href={service.url} target="_blank" rel="noreferrer" aria-label="Open Transmission">
+    <div className="transmission-card-top"><a className="service-card" href={service.url} target={webTarget} rel="noreferrer" aria-label="Open Transmission">
       <span className="card-mark"><ServiceIcon id="transmission" name={service.name} /></span><span className="card-copy"><strong>{service.name}</strong></span>
     </a>
     <div className="transmission-stats" aria-live="polite">{summary ? <>
@@ -42,7 +44,7 @@ export function TransmissionCard({ service }: { service: ServiceItem }) {
       <span>Web controls</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg>
     </button></div>
     {open && <div className="transmission-panel" id="transmission-panel">
-      <div className="transmission-panel-heading"><p>Full Transmission controls. If sign-in is needed, <a href={service.url} target="_blank" rel="noreferrer">open in a full page</a>, then reload this panel.</p><button type="button" onClick={() => setFrameKey(k => k + 1)}>Reload panel</button></div>
+      <div className="transmission-panel-heading"><p>Full Transmission controls. If sign-in is needed, <a href={service.url} target={webTarget} rel="noreferrer">open in a full page</a>, then reload this panel.</p><button type="button" onClick={() => setFrameKey(k => k + 1)}>Reload panel</button></div>
       <iframe key={frameKey} src={service.url} title="Transmission web controls" loading="lazy" referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" />
     </div>}
   </article>;

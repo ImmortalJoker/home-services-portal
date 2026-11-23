@@ -8,6 +8,7 @@ import { InstallPortal } from './InstallPortal';
 import { ServiceIcon } from './ServiceIcon';
 import { AppRecommendations } from './AppRecommendations';
 import { TransmissionCard } from './TransmissionCard';
+import { serviceWebTarget } from './service-navigation';
 
 export interface PortalIdentity {
   username: string;
@@ -57,6 +58,7 @@ function PortalHeader({ config, identity, connection, pending = false }: { confi
 
 export function Portal({ config, identity, connection = 'unknown' }: { config: PortalConfig; identity?: PortalIdentity; connection?: Connection }) {
   const platform = detectMobilePlatform(typeof navigator === 'undefined' ? undefined : navigator);
+  const webTarget = serviceWebTarget();
   if (identity?.role === 'Pending') {
     return (
       <main className="shell">
@@ -91,7 +93,7 @@ export function Portal({ config, identity, connection = 'unknown' }: { config: P
               {config.services.filter(service => service.widget !== 'system-status').map(service => {
                 if (service.id === 'transmission') return <TransmissionCard key={service.id} service={service} />;
                 const app = getAppLaunch(service, platform);
-                const webLink = <a className="service-card" href={service.url} target="_blank" rel="noreferrer" aria-label={`Open ${service.name}`} title={service.description}>
+                const webLink = <a className="service-card" href={service.url} target={webTarget} rel="noreferrer" aria-label={`Open ${service.name}`} title={service.description}>
                     <span className="card-mark"><ServiceIcon id={service.id} name={service.name} /></span>
                     <span className="card-copy">
                       <strong>{service.name}</strong>
@@ -101,9 +103,9 @@ export function Portal({ config, identity, connection = 'unknown' }: { config: P
                   {webLink}
                   {(app || service.opdsUrl) && <div className="service-launch-actions">
                     {app && <><a className="service-launch-app" href={app.href} aria-label={`Open ${service.name} in ${app.label}`} referrerPolicy="no-referrer">App</a>
-                    <a className="service-launch-web" href={service.url} target="_blank" rel="noreferrer" aria-label={`Open ${service.name} in browser`}>Open web</a>
+                    <a className="service-launch-web" href={service.url} target={webTarget} rel="noreferrer" aria-label={`Open ${service.name} in browser`}>Open web</a>
                     </>}
-                    {service.opdsUrl && <a className="service-launch-web" href={service.opdsUrl} target="_blank" rel="noreferrer" aria-label={`Open ${service.name} OPDS`}>OPDS</a>}
+                    {service.opdsUrl && <a className="service-launch-web" href={service.opdsUrl} target={webTarget} rel="noreferrer" aria-label={`Open ${service.name} OPDS`}>OPDS</a>}
                   </div>}
                 </article>;
               })}
