@@ -38,6 +38,8 @@ jobs:
       - run: npm run test:portal-server
       - name: Verify Authentik Compose security boundaries
         run: npm run test:authentik-compose
+      - name: Verify Authentik runtime harness without starting an identity stack
+        run: npm run test:authentik-verifier
       - name: Verify portal proxy peer isolation with disposable containers
         run: npm run test:portal-network
       - name: Build public Pages demo

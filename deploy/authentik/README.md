@@ -142,6 +142,8 @@ npm run test:authentik-runtime -- --confirm-test-stack
 
 The check reapplies the blueprint twice, creates and removes a random disabled Owner-role test account, and verifies membership plus provider/application/outpost/policy wiring and the local notification rule targeting `authentik Admins`. It does not prove delivery from a completed enrollment flow or remote phone access; those still need a real client. Local Authentik notifications appear in-app; email delivery requires separate SMTP configuration.
 
+For a separately constructed, fixture-only runtime rehearsal, see [Disposable Authentik ORM acceptance](../../docs/authentik-rel04-acceptance.md). It uses fresh resources rather than the configured stack above; the normal CI verifier suites never opt into that runtime.
+
 ## Optional Audiobookshelf gateway
 
 `PORTAL_AUDIOBOOKSHELF_EXTERNAL_HOST` is empty by default. When configured, the blueprint creates an Authentik proxy application for a loopback Audiobookshelf upstream at the blueprint's `internal_host` (default `http://host.docker.internal:13378`; edit the blueprint if your instance uses another port), grants it to Public, Family, and Owner, and assigns it to the embedded outpost. The deployment-specific HTTPS URL belongs only in the ignored `.env` and private portal service config, never in this repository.

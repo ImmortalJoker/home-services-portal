@@ -61,6 +61,45 @@ function envFor(keys, extra = {}) {
   return { ...env, ...extra };
 }
 
+// Fixtures mirror the system blueprints in Authentik 2026.8.5.
+const MANAGED_PROXY_SCOPE_MAPPINGS = [
+  ['managed-openid', 'goauthentik.io/providers/oauth2/scope-openid', 'openid', `# This scope is required by the OpenID-spec, and must as such exist in authentik.
+# The scope by itself does not grant any information
+return {}`],
+  ['managed-profile', 'goauthentik.io/providers/oauth2/scope-profile', 'profile', `avatar = request.user.avatar
+return delete_none_values({
+    "name": request.user.name,
+    "given_name": ak_obj_attr(request.user, "given_name", "name"),
+    "family_name": ak_obj_attr(request.user, "family_name"),
+    "preferred_username": request.user.username,
+    "nickname": request.user.username,
+    "groups": [group.name for group in request.user.groups.all()],
+    # Only expose URL-based avatars: generated avatars are inline base64
+    # SVG data URIs, which would bloat the ID/access token for every
+    # user without a real avatar URL (OIDC expects a URL here).
+    "picture": avatar if avatar and not avatar.startswith("data:") else None,
+})`],
+  ['managed-email', 'goauthentik.io/providers/oauth2/scope-email', 'email', `return {
+    "email": request.user.email,
+    "email_verified": False
+}`],
+  ['managed-entitlements', 'goauthentik.io/providers/oauth2/scope-entitlements', 'entitlements', `entitlements = [entitlement.name for entitlement in request.user.app_entitlements(provider.application)]
+return {
+    "entitlements": entitlements,
+    "roles": entitlements,
+}`],
+  ['managed-proxy', 'goauthentik.io/providers/proxy/scope-proxy', 'ak_proxy', `# This mapping is used by the authentik proxy. It passes extra user attributes,
+# which are used for example for the HTTP-Basic Authentication mapping.
+return {
+    "ak_proxy": {
+        "user_attributes": request.user.group_attributes(request),
+        "is_superuser": request.user.is_superuser,
+    }
+}`],
+].map(([pk, managed, scope_name, expression]) => ({
+  pk, name: `Synthetic managed mapping ${pk}`, managed, scope_name, expression,
+}));
+
 // Builds a world that matches the blueprint for `env`. Disabled optional
 // providers are absent unless `lingering` lists their keys.
 function buildWorld(env, { lingering = [] } = {}) {
@@ -73,8 +112,9 @@ function buildWorld(env, { lingering = [] } = {}) {
       { pk: 'scope-immich-profile', name: 'Portal Immich Profile (No Email)', scope_name: 'profile', expression: customMapping('immich-oidc').expression },
     ],
     propertyMappings: [
-      { pk: 'map-metrics-host', name: 'Portal Metrics Host Header', expression: spec('metrics').propertyMappings[0].expression },
-      { pk: 'map-transmission-host', name: 'Portal Transmission Host Header', expression: spec('transmission').propertyMappings[0].expression },
+      ...MANAGED_PROXY_SCOPE_MAPPINGS.map((mapping) => ({ ...mapping })),
+      { pk: 'map-metrics-host', name: 'Portal Metrics Host Header', scope_name: 'portal-metrics-host-header', expression: spec('metrics').propertyMappings[0].expression },
+      { pk: 'map-transmission-host', name: 'Portal Transmission Host Header', scope_name: 'portal-transmission-host-header', expression: spec('transmission').propertyMappings[0].expression },
     ],
     groups: PORTAL_GROUP_NAMES.map((name) => ({ name, attributes: {} })),
     proxyProviders: [proxyRecord(BASE_PROVIDER, 'base', { internal_host: 'http://host.docker.internal:8080' })],
@@ -94,8 +134,11 @@ function buildWorld(env, { lingering = [] } = {}) {
         basic_auth_enabled: Boolean(entry.basicAuth),
         basic_auth_user_attribute: entry.basicAuth?.userAttribute ?? '',
         basic_auth_password_attribute: entry.basicAuth?.passwordAttribute ?? '',
-        property_mappings: entry.propertyMappings.map((mapping) =>
-          world.propertyMappings.find((candidate) => candidate.name === mapping.name).pk),
+        property_mappings: [
+          ...MANAGED_PROXY_SCOPE_MAPPINGS.map((mapping) => mapping.pk),
+          ...entry.propertyMappings.map((mapping) =>
+            world.propertyMappings.find((candidate) => candidate.name === mapping.name).pk),
+        ],
       }));
       if (on) world.outpostProviders.push(pk);
       if (on && entry.basicAuth) {
@@ -287,6 +330,17 @@ test('Transmission credentials copied onto a non-Owner group fail', () => {
   expectFail(env, world, /transmission: upstream credentials present on Portal - Family$/);
 });
 
+test('Transmission rejects a missing managed proxy mapping required for upstream Basic Auth', () => {
+  const env = envFor(['transmission']);
+  const world = buildWorld(env);
+  const provider = providerOf(world, 'transmission');
+  provider.property_mappings = [
+    ...MANAGED_PROXY_SCOPE_MAPPINGS.filter((mapping) => mapping.pk !== 'managed-proxy').map(({ pk }) => pk),
+    'map-transmission-host',
+  ];
+  expectFail(env, world, /transmission: missing required managed proxy mapping for upstream basic auth$/);
+});
+
 test('Transmission proxy drift fails closed', () => {
   const env = envFor(['transmission']);
   const cases = [
@@ -352,14 +406,17 @@ test('OIDC redirect, scope and mapping drift fails closed', () => {
     ['audiobookshelf-oidc', (provider) => { provider.redirect_uris[0].matching_mode = 'regex'; }, /redirect URIs must be exactly the configured strict URIs$/],
     ['audiobookshelf-oidc', (provider) => { provider.redirect_uris.pop(); }, /redirect URIs must be exactly the configured strict URIs$/],
     ['immich-oidc', (provider) => { provider.property_mappings.push('scope-email'); }, /immich-oidc: scopes must be exactly openid, profile$/],
-    ['immich-oidc', (provider) => { provider.property_mappings.push('map-metrics-host'); }, /immich-oidc: non-scope property mapping attached$/],
+    ['immich-oidc', (provider, world) => {
+      world.propertyMappings.push({ pk: 'map-nonscope-extra', name: 'Non-scope extra mapping', expression: 'return {}' });
+      provider.property_mappings.push('map-nonscope-extra');
+    }, /immich-oidc: non-scope property mapping attached$/],
     ['immich-oidc', (provider) => { provider.grant_types.push('implicit'); }, /immich-oidc: grant_types must be authorization_code only$/],
     ['immich-oidc', (provider) => { provider.sub_mode = 'user_email'; }, /immich-oidc: sub_mode must be hashed_user_id$/],
   ];
   for (const [key, mutate, pattern] of cases) {
     const env = envFor([key]);
     const world = buildWorld(env);
-    mutate(providerOf(world, key));
+    mutate(providerOf(world, key), world);
     expectFail(env, world, pattern);
   }
 });
@@ -372,13 +429,13 @@ test('Metrics host-header mapping drift fails closed', () => {
   const env = envFor(['metrics']);
   const cases = [
     // Static/internal host header instead of the configured external host.
-    [(world) => { world.propertyMappings[0].expression = 'return {"ak_proxy": {"host_header": "host.docker.internal:8086"}}'; }, /metrics: property mapping expression mismatch for Portal Metrics Host Header$/],
-    [(world) => { world.propertyMappings[0].expression = ''; }, /metrics: property mapping expression mismatch for Portal Metrics Host Header$/],
+    [(world) => { world.propertyMappings.find((mapping) => mapping.name === 'Portal Metrics Host Header').expression = 'return {"ak_proxy": {"host_header": "host.docker.internal:8086"}}'; }, /metrics: property mapping expression mismatch for Portal Metrics Host Header$/],
+    [(world) => { world.propertyMappings.find((mapping) => mapping.name === 'Portal Metrics Host Header').expression = ''; }, /metrics: property mapping expression mismatch for Portal Metrics Host Header$/],
     // A look-alike mapping under another name does not satisfy the spec.
-    [(world) => { world.propertyMappings[0].name = 'Portal Metrics Host Header (copy)'; }, /metrics: missing property mapping Portal Metrics Host Header$/],
+    [(world) => { world.propertyMappings.find((mapping) => mapping.name === 'Portal Metrics Host Header').name = 'Portal Metrics Host Header (copy)'; }, /metrics: missing property mapping Portal Metrics Host Header$/],
     // Duplicate same-named mappings make the effective header ambiguous.
     [(world) => {
-      world.propertyMappings.push({ pk: 'map-metrics-dup', name: 'Portal Metrics Host Header', expression: 'return {"ak_proxy": {"host_header": "other"}}' });
+      world.propertyMappings.push({ pk: 'map-metrics-dup', name: 'Portal Metrics Host Header', scope_name: 'portal-metrics-host-header', expression: 'return {"ak_proxy": {"host_header": "other"}}' });
       providerOf(world, 'metrics').property_mappings.push('map-metrics-dup');
     }, /metrics: expected exactly one property mapping Portal Metrics Host Header$/],
   ];
@@ -389,10 +446,96 @@ test('Metrics host-header mapping drift fails closed', () => {
   }
 });
 
+for (const key of ['metrics', 'transmission']) {
+  test(`${key} rejects custom host-header scope_name drift`, () => {
+    const env = envFor([key]);
+    const world = buildWorld(env);
+    const { name } = spec(key).propertyMappings[0];
+    world.propertyMappings.find((mapping) => mapping.name === name).scope_name = 'sentinel-custom-scope';
+    expectFail(env, world, new RegExp(`${key}: custom property mapping scope_name mismatch$`));
+  });
+}
+
+test('Metrics rejects an additional distinct property mapping', () => {
+  const env = envFor(['metrics']);
+  const world = buildWorld(env);
+  world.propertyMappings.push({ pk: 'map-metrics-extra', name: 'Extra Metrics Mapping', scope_name: 'metrics-extra', expression: 'return {}' });
+  providerOf(world, 'metrics').property_mappings.push('map-metrics-extra');
+  expectFail(env, world, /metrics: unexpected property mappings$/);
+});
+
+test('Metrics rejects an unknown managed mapping by identifier', () => {
+  const env = envFor(['metrics']);
+  const world = buildWorld(env);
+  world.propertyMappings.push({
+    pk: 'map-unknown-managed',
+    name: 'Unknown managed mapping',
+    managed: 'example.invalid/providers/proxy/scope-unknown',
+    scope_name: 'unknown',
+    expression: 'return {}',
+  });
+  providerOf(world, 'metrics').property_mappings.push('map-unknown-managed');
+  expectFail(env, world, /metrics: unexpected managed property mapping$/);
+});
+
+test('Metrics rejects expression drift in each attached Authentik-managed mapping', () => {
+  const env = envFor(['metrics']);
+  for (const { pk } of MANAGED_PROXY_SCOPE_MAPPINGS) {
+    const world = buildWorld(env);
+    world.propertyMappings.find((mapping) => mapping.pk === pk).expression = 'return {"sentinel-managed-expression": True}';
+    expectFail(env, world, /metrics: managed scope mapping expression mismatch$/);
+  }
+});
+
+test('Metrics rejects scope_name drift in an attached Authentik-managed mapping', () => {
+  const env = envFor(['metrics']);
+  const world = buildWorld(env);
+  world.propertyMappings.find((mapping) => mapping.pk === 'managed-proxy').scope_name = 'sentinel-managed-scope';
+  expectFail(env, world, /metrics: managed scope mapping scope_name mismatch$/);
+});
+
+test('Metrics rejects an attached non-ScopeMapping row', () => {
+  const env = envFor(['metrics']);
+  const world = buildWorld(env);
+  world.propertyMappings.push({ pk: 'map-metrics-generic', name: 'Generic mapping', expression: 'return {}' });
+  providerOf(world, 'metrics').property_mappings.push('map-metrics-generic');
+  expectFail(env, world, /metrics: non-scope property mapping attached$/);
+});
+
+test('Metrics rejects distinct rows with the same managed ID', () => {
+  const env = envFor(['metrics']);
+  const world = buildWorld(env);
+  const original = world.propertyMappings.find((mapping) => mapping.pk === 'managed-openid');
+  const duplicate = { ...original, pk: 'managed-openid-copy', name: 'Duplicate managed mapping' };
+  world.propertyMappings.push(duplicate);
+  providerOf(world, 'metrics').property_mappings.push(duplicate.pk);
+  expectFail(env, world, /metrics: duplicate managed property mapping$/);
+});
+
+test('Metrics accepts canonical managed mappings with CRLF and trailing whitespace', () => {
+  const env = envFor(['metrics']);
+  const world = buildWorld(env);
+  for (const mapping of world.propertyMappings.filter((entry) => entry.managed)) {
+    mapping.expression = mapping.expression.split('\n').join('  \r\n') + '  \r\n';
+  }
+  expectOk(env, world, ['metrics']);
+});
+
+test('Metrics accepts a subset of the canonical managed mappings', () => {
+  const env = envFor(['metrics']);
+  const world = buildWorld(env);
+  const provider = providerOf(world, 'metrics');
+  provider.property_mappings = ['managed-proxy', 'map-metrics-host'];
+  expectOk(env, world, ['metrics']);
+  provider.property_mappings = ['map-metrics-host'];
+  expectOk(env, world, ['metrics']);
+});
+
 test('Metrics host-header mapping tolerates only whitespace-level differences', () => {
   const env = envFor(['metrics']);
   const world = buildWorld(env);
-  world.propertyMappings[0].expression = `\n${world.propertyMappings[0].expression.replaceAll('\n', '   \n')}\n\n`;
+  const mapping = world.propertyMappings.find((entry) => entry.name === 'Portal Metrics Host Header');
+  mapping.expression = `\n${mapping.expression.replaceAll('\n', '   \n')}\n\n`;
   expectOk(env, world, ['metrics']);
 });
 
@@ -509,6 +652,37 @@ const findGroupName = (find) => {
 const providerModel = (entry) =>
   entry.kind === 'proxy' ? 'authentik_providers_proxy.proxyprovider' : 'authentik_providers_oauth2.oauth2provider';
 
+function collectEnvNames(node, names = new Set()) {
+  if (Array.isArray(node)) {
+    for (const item of node) collectEnvNames(item, names);
+  } else if (node && typeof node === 'object') {
+    if ('$env' in node) names.add(node.$env);
+    else for (const value of Object.values(node)) collectEnvNames(value, names);
+  }
+  return names;
+}
+
+function assertEmbeddedOutpostProviderParity(blueprint, env, label) {
+  const active = (entry) => (entry.conditions ?? []).every((condition) => Boolean(render(condition, env)));
+  const activeProxyIds = blueprint
+    .filter((entry) => entry.model === 'authentik_providers_proxy.proxyprovider' && active(entry))
+    .map((entry) => entry.id)
+    .sort();
+  const activeOutposts = blueprint.filter((entry) =>
+    entry.model === 'authentik_outposts.outpost' &&
+    entry.identifiers?.name === 'authentik Embedded Outpost' &&
+    active(entry));
+  assert.equal(activeOutposts.length, 1, `${label}: expected exactly one active embedded outpost`);
+
+  const refs = activeOutposts[0].attrs.providers ?? [];
+  const providerIds = refs.map((ref) => {
+    assert.ok(ref && typeof ref.$keyOf === 'string', `${label}: expected a !KeyOf provider reference`);
+    return ref.$keyOf;
+  });
+  assert.equal(new Set(providerIds).size, providerIds.length, `${label}: duplicate provider references`);
+  assert.deepEqual(providerIds.sort(), activeProxyIds, `${label}: outpost provider IDs differ from active proxy providers`);
+}
+
 function blueprintFor(entry) {
   const providers = BLUEPRINT.filter((item) => item.model === providerModel(entry) && item.identifiers?.name === entry.providerName);
   assert.equal(providers.length, 1, `${entry.key}: expected one blueprint provider`);
@@ -526,6 +700,41 @@ function blueprintFor(entry) {
   };
   return { provider, application, bindings, byId };
 }
+
+test('embedded outpost provider membership matches active proxy providers for every host combination', () => {
+  const conditionalEntries = BLUEPRINT.filter((entry) =>
+    entry.model === 'authentik_providers_proxy.proxyprovider' ||
+    entry.model === 'authentik_outposts.outpost');
+  const hostVariables = [...new Set(conditionalEntries.flatMap((entry) => [...collectEnvNames(entry.conditions)]))].sort();
+  assert.ok(hostVariables.length > 0, 'expected conditional provider/outpost host variables');
+  // Keep exhaustive coverage bounded if future blueprint conditions add variables.
+  assert.ok(hostVariables.length <= 12, `too many host-variable combinations to enumerate: ${hostVariables.length}`);
+
+  for (let mask = 0; mask < 2 ** hostVariables.length; mask += 1) {
+    const enabled = hostVariables.filter((_, bit) => mask & (1 << bit));
+    const env = Object.fromEntries(enabled.map((name) => [name, 'synthetic.example.test']));
+    assertEmbeddedOutpostProviderParity(BLUEPRINT, env, `enabled host variables: ${enabled.join(', ') || 'none'}`);
+  }
+});
+
+test('outpost parity check detects a missing Metrics provider reference', () => {
+  const env = {
+    PORTAL_TEST_EXTERNAL_HOST: 'test.synthetic.example',
+    PORTAL_METRICS_EXTERNAL_HOST: 'metrics.synthetic.example',
+  };
+  assert.doesNotThrow(() => assertEmbeddedOutpostProviderParity(BLUEPRINT, env, 'baseline Test + Metrics outpost'));
+
+  const brokenBlueprint = structuredClone(BLUEPRINT);
+  const outpost = brokenBlueprint.find((entry) => entry.id === 'portal-test-metrics-outpost');
+  assert.ok(outpost, 'expected the Test + Metrics outpost fixture');
+  assert.ok(Array.isArray(outpost.attrs.providers), 'expected the Test + Metrics outpost provider list');
+  outpost.attrs.providers = outpost.attrs.providers.filter((ref) => ref.$keyOf !== 'portal-metrics-provider');
+
+  assert.throws(
+    () => assertEmbeddedOutpostProviderParity(brokenBlueprint, env, 'mutated Test + Metrics outpost'),
+    /outpost provider IDs differ from active proxy providers/,
+  );
+});
 
 test('spec enable conditions and required settings match the blueprint', () => {
   const source = readFileSync(BLUEPRINT_PATH, 'utf8');
@@ -574,8 +783,12 @@ test('spec provider, application and binding attributes match the blueprint', ()
       }
       const mappings = (attrs.property_mappings ?? []).map((ref) => byId(ref.$keyOf));
       assert.deepEqual(
-        mappings.map((mapping) => [mapping.identifiers.name, normalizeExpression(mapping.attrs.expression)]),
-        entry.propertyMappings.map((mapping) => [mapping.name, normalizeExpression(mapping.expression)]),
+        mappings.map((mapping) => [
+          mapping.model, mapping.identifiers.name, mapping.attrs.scope_name, normalizeExpression(mapping.attrs.expression),
+        ]),
+        entry.propertyMappings.map((mapping) => [
+          'authentik_providers_oauth2.scopemapping', mapping.name, mapping.scopeName, normalizeExpression(mapping.expression),
+        ]),
         `${entry.key}: property mappings differ from blueprint`,
       );
     } else {

@@ -83,7 +83,7 @@ export const OPTIONAL_PROVIDERS = [
     basicAuth: null,
     // The host header must follow the configured external host; a static or
     // internal value would let requests reach the upstream under another vhost.
-    propertyMappings: [{ name: 'Portal Metrics Host Header', expression: METRICS_HOST_HEADER_EXPRESSION }],
+    propertyMappings: [{ name: 'Portal Metrics Host Header', scopeName: 'portal-metrics-host-header', expression: METRICS_HOST_HEADER_EXPRESSION }],
     bindings: [OWNER],
   },
   {
@@ -105,7 +105,7 @@ export const OPTIONAL_PROVIDERS = [
       passwordEnv: 'PORTAL_TRANSMISSION_RPC_PASSWORD',
       group: OWNER,
     },
-    propertyMappings: [{ name: 'Portal Transmission Host Header', expression: TRANSMISSION_HOST_HEADER_EXPRESSION }],
+    propertyMappings: [{ name: 'Portal Transmission Host Header', scopeName: 'portal-transmission-host-header', expression: TRANSMISSION_HOST_HEADER_EXPRESSION }],
     bindings: [OWNER],
   },
   {
@@ -198,6 +198,42 @@ from authentik.providers.proxy.models import ProxyProvider as PortalProxyProvide
 
 PORTAL_OPTIONAL_PROVIDERS = portal_json.loads(__PORTAL_SPEC__)
 PORTAL_GROUP_NAMES = portal_json.loads(__PORTAL_GROUPS__)
+# Canonical scope mappings from the Authentik 2026.8.5 system blueprints.
+PORTAL_PROXY_MANAGED_MAPPINGS = {
+    'goauthentik.io/providers/oauth2/scope-openid': ('openid', """# This scope is required by the OpenID-spec, and must as such exist in authentik.
+# The scope by itself does not grant any information
+return {}"""),
+    'goauthentik.io/providers/oauth2/scope-profile': ('profile', """avatar = request.user.avatar
+return delete_none_values({
+    "name": request.user.name,
+    "given_name": ak_obj_attr(request.user, "given_name", "name"),
+    "family_name": ak_obj_attr(request.user, "family_name"),
+    "preferred_username": request.user.username,
+    "nickname": request.user.username,
+    "groups": [group.name for group in request.user.groups.all()],
+    # Only expose URL-based avatars: generated avatars are inline base64
+    # SVG data URIs, which would bloat the ID/access token for every
+    # user without a real avatar URL (OIDC expects a URL here).
+    "picture": avatar if avatar and not avatar.startswith("data:") else None,
+})"""),
+    'goauthentik.io/providers/oauth2/scope-email': ('email', """return {
+    "email": request.user.email,
+    "email_verified": False
+}"""),
+    'goauthentik.io/providers/oauth2/scope-entitlements': ('entitlements', """entitlements = [entitlement.name for entitlement in request.user.app_entitlements(provider.application)]
+return {
+    "entitlements": entitlements,
+    "roles": entitlements,
+}"""),
+    'goauthentik.io/providers/proxy/scope-proxy': ('ak_proxy', """# This mapping is used by the authentik proxy. It passes extra user attributes,
+# which are used for example for the HTTP-Basic Authentication mapping.
+return {
+    "ak_proxy": {
+        "user_attributes": request.user.group_attributes(request),
+        "is_superuser": request.user.is_superuser,
+    }
+}"""),
+}
 
 
 def portal_require(condition, key, message):
@@ -309,15 +345,46 @@ def portal_verify_proxy(spec, provider, outpost):
             )
     else:
         portal_require(provider.basic_auth_enabled is False, key, 'basic auth must be disabled')
-    mapping_names = set(provider.property_mappings.values_list('name', flat=True))
+    mapping_pks = list(provider.property_mappings.values_list('pk', flat=True))
+    attached_mappings = list(PortalScopeMapping.objects.filter(pk__in=mapping_pks))
+    portal_require(len(attached_mappings) == len(mapping_pks), key, 'non-scope property mapping attached')
+    managed_ids = [getattr(mapping, 'managed', '') or '' for mapping in attached_mappings]
+    portal_require(
+        all(not managed or managed in PORTAL_PROXY_MANAGED_MAPPINGS for managed in managed_ids),
+        key,
+        'unexpected managed property mapping',
+    )
+    known_managed_ids = [managed for managed in managed_ids if managed]
+    portal_require(len(known_managed_ids) == len(set(known_managed_ids)), key, 'duplicate managed property mapping')
+    custom_mappings = []
+    for mapping, managed in zip(attached_mappings, managed_ids):
+        if not managed:
+            custom_mappings.append(mapping)
+            continue
+        scope_name, expression = PORTAL_PROXY_MANAGED_MAPPINGS[managed]
+        portal_require(mapping.scope_name == scope_name, key, 'managed scope mapping scope_name mismatch')
+        portal_require(
+            portal_normalize_expression(mapping.expression) == portal_normalize_expression(expression),
+            key,
+            'managed scope mapping expression mismatch',
+        )
+    mapping_names = set(mapping.name for mapping in custom_mappings)
     for mapping in spec['propertyMappings']:
         portal_require(mapping['name'] in mapping_names, key, 'missing property mapping ' + mapping['name'])
-        attached = list(provider.property_mappings.filter(name=mapping['name']))
+        attached = [candidate for candidate in custom_mappings if candidate.name == mapping['name']]
         portal_require(len(attached) == 1, key, 'expected exactly one property mapping ' + mapping['name'])
+        portal_require(attached[0].scope_name == mapping['scopeName'], key, 'custom property mapping scope_name mismatch')
         portal_require(
             portal_normalize_expression(getattr(attached[0], 'expression', '')) == portal_normalize_expression(mapping['expression']),
             key,
             'property mapping expression mismatch for ' + mapping['name'],
+        )
+    portal_require(mapping_names == {mapping['name'] for mapping in spec['propertyMappings']}, key, 'unexpected property mappings')
+    if basic:
+        portal_require(
+            'goauthentik.io/providers/proxy/scope-proxy' in known_managed_ids,
+            key,
+            'missing required managed proxy mapping for upstream basic auth',
         )
     portal_require(outpost.providers.filter(pk=provider.pk).exists(), key, 'provider not assigned to the embedded outpost')
 

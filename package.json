@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:authentik-compose": "node scripts/verify-authentik-compose.mjs",
+    "test:authentik-verifier": "node --test tests/authentik-runtime-optional-providers.test.mjs tests/authentik-rel04-acceptance.test.mjs",
     "test:portal-network": "node scripts/verify-portal-network.mjs",
     "test:grocy-proxy-config": "node --test tests/grocy-proxy-config.test.mjs",
     "test:grocy-proxy": "node --test tests/grocy-proxy.test.mjs",
