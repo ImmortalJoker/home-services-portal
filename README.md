@@ -46,6 +46,10 @@ The authenticated Authentik deployment provides server-side group filtering and 
 
 The authenticated portal also supports an optional inline `system-status` widget. Configure the Owner-only service with `widget: "system-status"`; the server independently checks the authenticated Owner group, fetches the configured source with a timeout and response-size limit, validates and filters known numeric fields, and sends no-store status data to the browser. The widget displays key metrics in the dashboard and retains a link to the JSON endpoint. Keep source URLs and private hostnames out of public service lists and environment examples. The static demo cannot authorize access and must not expose a private status source.
 
+## Installed PWA navigation
+
+On Android in standalone display mode, service cards, Open web/OPDS actions and Transmission full-page links request navigation in the current window instead of a new window. This retains the dashboard in the navigation history. Normal browser tabs, desktop and iOS retain separate windows; native app intents and referrer protections are unchanged. Browser-owned close controls remain platform-specific, and this does not expand the PWA's scope to other service origins. Raw-metrics and setup-documentation links are unchanged.
+
 ## Optional identity-provider test environment
 
 A local Authentik Compose environment and protected portal demo are in [`deploy/authentik`](deploy/authentik/README.md). Authentik's web port binds to loopback; the demo service is not host-published and its sample routes enforce group access in the upstream server. A Tailscale Serve route is optional and must be configured manually after reviewing tailnet access policy. The integration is isolated to these sample routes; do not put real services behind it until interactive login, authorization, and bypass tests pass.
