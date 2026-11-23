@@ -152,7 +152,7 @@ function SystemStatusReading({ service }: { service: ServiceItem }) {
         </button>
       </header>
 
-      <div className="system-status-message">
+      <div className="system-status-message" data-stale={view.state === 'loaded' && view.stale}>
         {view.state === 'error' ? (
           <span role="alert">{view.accessDenied
             ? 'System status access was denied. Check your sign-in and refresh.'

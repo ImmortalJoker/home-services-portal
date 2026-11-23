@@ -31,13 +31,13 @@ export function TransmissionCard({ service }: { service: ServiceItem }) {
   }, []);
   return <article className={`service-tile transmission-tile${open ? ' transmission-expanded' : ''}`} aria-label="Transmission">
     <div className="transmission-card-top"><a className="service-card" href={service.url} target="_blank" rel="noreferrer" aria-label="Open Transmission">
-      <span className="card-mark mark-2"><ServiceIcon id="transmission" name={service.name} /></span><span className="card-copy"><strong>{service.name}</strong></span>
+      <span className="card-mark"><ServiceIcon id="transmission" name={service.name} /></span><span className="card-copy"><strong>{service.name}</strong></span>
     </a>
     <div className="transmission-stats" aria-live="polite">{summary ? <>
       <span>{summary.downloading} downloading · {summary.active} of {summary.total} active</span>
       <strong>{summary.percent === null ? 'No torrents' : `${Math.round(summary.percent)}% overall`}</strong>
       <span className="transmission-speeds">↓ {speed(summary.download_bps)} · ↑ {speed(summary.upload_bps)}</span>
-    </> : <span>{failed ? 'Status unavailable' : 'Loading status…'}</span>}</div>
+    </> : <span className={failed ? 'transmission-error' : undefined}>{failed ? 'Status unavailable' : 'Loading status…'}</span>}</div>
     <button type="button" className="transmission-expand" aria-expanded={open} aria-controls="transmission-panel" onClick={() => setOpen(!open)}>
       <span>Web controls</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg>
     </button></div>

@@ -17,7 +17,7 @@ Both Vite builds copy these to dist/LICENSE.txt, dist/NOTICE.txt and
 dist/licenses/OFL-*.txt. In the public Pages build they are reachable under
 the configured base path (by default /home-services-portal/), for example
 /home-services-portal/LICENSE.txt and /home-services-portal/NOTICE.txt.
-The three font texts are under /home-services-portal/licenses/ using the
+The font notices are under /home-services-portal/licenses/ using the
 OFL filenames listed below.
 
 The Authentik Docker runtime includes the same files in /app/dist/ and
@@ -67,6 +67,23 @@ Package sources: https://www.npmjs.com/package/@fontsource/dm-mono,
 https://www.npmjs.com/package/@fontsource-variable/dm-sans and
 https://www.npmjs.com/package/@fontsource-variable/space-grotesk
 (Fontsource, https://fontsource.org/).
+
+- VT323 Regular: unmodified official TTF, supplied from the Google Fonts
+  repository (https://github.com/google/fonts/tree/main/ofl/vt323).
+  License: src/assets/fonts/OFL-VT323.txt (SIL OFL 1.1).
+  VT323-Regular.ttf
+    cf4de751ada78ceac033dbe16a687742939995b77bc2a052ae17a4957958594d
+
+Glitchtype adaptation
+--------------------
+
+The portal theme contains styles derived from Glitchtype, copyright © 2026
+Uiverse. All rights reserved. These styles are subject to the Uiverse Design
+System License v1 at licenses/Glitchtype.txt in the build and
+public/licenses/Glitchtype.txt in the source. The project owner confirmed
+permission to publish the adapted source on 2026-11-23. These third-party
+terms remain separate from the project MIT license. See
+docs/glitchtype-provenance.md in the source for attribution.
 
 React runtime packages
 ----------------------

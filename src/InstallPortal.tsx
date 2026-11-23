@@ -7,8 +7,12 @@ interface InstallEvent extends Event {
 }
 
 function standalone() {
-  return window.matchMedia?.('(display-mode: standalone)').matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  if ((navigator as Navigator & { standalone?: boolean }).standalone === true) return true;
+  try {
+    return window.matchMedia?.('(display-mode: standalone)')?.matches ?? false;
+  } catch {
+    return false;
+  }
 }
 
 export function InstallPortal() {

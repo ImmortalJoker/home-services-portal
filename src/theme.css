@@ -1,0 +1,72 @@
+/*! Glitchtype adaptation, Uiverse Design System License v1.
+    Copyright © 2026 Uiverse. All rights reserved. See licenses/Glitchtype.txt in the build and docs/glitchtype-provenance.md in source. */
+:root {
+  --portal-page: #f4efe2;
+  --portal-surface: #fffdf5;
+  --portal-inset: #ebe5d4;
+  --portal-hover: #f7efc5;
+  --portal-text: #0b0b0b;
+  --portal-muted: #595448;
+  --portal-border: #242017;
+  --portal-control-border: #655e4e;
+  --portal-shadow-color: #242017;
+  --portal-accent: #ffe600;
+  --portal-accent-hover: #f1d800;
+  --portal-accent-pressed: #e2ca00;
+  --portal-on-accent: #0b0b0b;
+  --portal-focus: #24459a;
+  --portal-link: #23468b;
+  --portal-success: #235a40;
+  --portal-warning: #704800;
+  --portal-error: #9b2636;
+  --portal-track: #766d58;
+  --portal-meter: #0b1d15;
+  --portal-red-ghost: #ac384a;
+  --portal-blue-ghost: #4265ae;
+  --portal-radius: 15px;
+  --portal-control-radius: 10px;
+  --portal-shadow: 3px 3px 0 var(--portal-shadow-color);
+  --portal-gutter: clamp(1rem, 4vw, 2.75rem);
+  --portal-body-font: 'DM Sans', system-ui, sans-serif;
+  --portal-heading-font: 'Space Grotesk', system-ui, sans-serif;
+  --portal-display-font: 'VT323', var(--portal-heading-font);
+  --portal-mono-font: 'DM Mono', ui-monospace, monospace;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --portal-page: #151514;
+  --portal-surface: #222220;
+  --portal-inset: #2b2a26;
+  --portal-hover: #343123;
+  --portal-text: #faf3df;
+  --portal-muted: #c4bcaa;
+  --portal-border: #777163;
+  --portal-control-border: #938a76;
+  --portal-shadow-color: #080807;
+  --portal-accent: #ffe600;
+  --portal-accent-hover: #fff078;
+  --portal-accent-pressed: #e2ca00;
+  --portal-on-accent: #0b0b0b;
+  --portal-focus: #a9c4ff;
+  --portal-link: #b6cdff;
+  --portal-success: #9cdbb5;
+  --portal-warning: #f5ca79;
+  --portal-error: #ffacb4;
+  --portal-track: #827b6d;
+  --portal-meter: #fff078;
+  --portal-red-ghost: #d87783;
+  --portal-blue-ghost: #789ce0;
+  color-scheme: dark;
+}
+
+/* Use the OS canvas while the external entry module resolves the saved choice. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+  }
+
+  :root:not([data-theme]) body {
+    background: #151514;
+  }
+}
