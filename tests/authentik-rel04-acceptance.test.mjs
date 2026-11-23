@@ -462,3 +462,88 @@ test('Docker transport propagates startup timeout and filters preflight identiti
     assertRedacted(JSON.stringify(result));
   }
 });
+
+test('HTTP listeners and fixture DNS aliases require explicit mode', () => {
+  const orm = buildFixture();
+  const http = buildFixture({ http: true });
+  assert.equal(orm.http, false);
+  assert.equal(http.http, true);
+  assert.equal(orm.compose.services.worker.networks, undefined);
+  assert.deepEqual(http.compose.networks, { default: { internal: true } });
+  assert.deepEqual(http.compose.services.worker.networks.default.aliases, ['upstream.rel04.test']);
+  assert.deepEqual(http.compose.services.server.networks.default.aliases,
+    ['auth.rel04.test', 'transmission.rel04.test', 'metrics.rel04.test']);
+  for (const [provider, port] of [['TRANSMISSION', 9091], ['METRICS', 8086]]) {
+    const key = `PORTAL_${provider}_EXTERNAL_HOST`;
+    assert.equal(orm.compose.services.worker.environment[key], `https://${provider.toLowerCase()}.rel04.test`);
+    assert.equal(http.compose.services.worker.environment[key], `http://${provider.toLowerCase()}.rel04.test:9000`);
+    assert.ok(http.blueprint.includes(`http://upstream.rel04.test:${port}`));
+  }
+  assert.deepEqual(Object.keys(http.compose.services), Object.keys(orm.compose.services));
+  for (const service of Object.values(http.compose.services)) {
+    for (const key of ['ports', 'extra_hosts', 'network_mode', 'privileged']) {
+      assert.equal(Object.hasOwn(service, key), false, key);
+    }
+    for (const mount of service.volumes ?? []) assert.equal(mount.type, 'volume');
+  }
+});
+
+test('HTTP mode requires the exact fixed success marker after ORM restoration', async () => {
+  for (const output of [dummySecret, 'REL04_HTTP_PASSED', 'REL04_HTTP_PASSED\nREL04_HTTP_AUTHORIZATION']) {
+    const commands = [];
+    const reports = [];
+    const acceptance = runAcceptance(async (args) => {
+      const source = args.at(-1);
+      commands.push(source);
+      const ormMarker = ['REL04_APPLIED', 'REL04_READY', 'REL04_DISABLED', 'REL04_CREATED', 'REL04_UPDATED']
+        .find((marker) => source.includes(marker));
+      if (ormMarker) return { ok: true, output: ormMarker };
+      if (source.includes('REL04_RESTORED')) return { ok: true, output: 'REL04_EXPECTED_REJECTION\nREL04_RESTORED' };
+      return { ok: true, output };
+    }, (message) => reports.push(message), buildFixture({ http: true }));
+    if (output === 'REL04_HTTP_PASSED') await acceptance;
+    else await assert.rejects(acceptance, /HTTP proxy acceptance failed/);
+    assert.match(commands.at(-2), /REL04_RESTORED/);
+    assert.match(commands.at(-1), /REL04_HTTP_PASSED/);
+    assertRedacted(reports.join('\n'));
+  }
+});
+
+test('upstream observations fail closed on malformed headers, anonymous arrivals and missing arrivals', () => {
+  const source = new URL('../scripts/authentik-rel04-http.py', import.meta.url);
+  const result = spawnSync('python3', ['-c', `
+import runpy, sys
+from email.message import Message
+probe = runpy.run_path(sys.argv[1])
+observe, require = probe['observe'], probe['require_arrivals']
+headers = Message()
+headers['Host'] = '127.0.0.1:9091'
+headers['Authorization'] = 'Basic Zml4dHVyZTpwdw=='
+expected = headers['Authorization']
+good = observe('transmission', 'GET', '/rel04-owner', headers, expected)
+assert good == 'transmission'
+require([good, 'metrics'], ['transmission', 'metrics'])
+assert observe('transmission', 'GET', '/unexpected', headers, expected) == 'REL04_HTTP_ACCESS'
+try:
+    require([good], [], anonymous=True)
+except probe['ProbeFailure'] as error:
+    assert str(error) == 'REL04_HTTP_ANONYMOUS'
+else:
+    raise AssertionError('anonymous arrival accepted')
+assert observe('transmission', 'GET', '/rel04-owner', headers, 'Basic wrong') == 'REL04_HTTP_AUTHORIZATION'
+headers['Authorization'] = expected
+assert observe('transmission', 'GET', '/rel04-owner', headers, expected) == 'REL04_HTTP_AUTHORIZATION'
+headers['Host'] = 'wrong'
+assert observe('transmission', 'GET', '/rel04-owner', headers, expected) == 'REL04_HTTP_HOST'
+metrics = Message()
+metrics['Host'] = 'metrics.rel04.test:9000'
+assert observe('metrics', 'GET', '/rel04-owner', metrics, expected) == 'metrics'
+for arrivals in ([], [good], [good, 'metrics', good], ['REL04_HTTP_ANONYMOUS', good, 'metrics']):
+    try:
+        require(arrivals, ['transmission', 'metrics'])
+    except probe['ProbeFailure']:
+        continue
+    raise AssertionError('unexpected inventory accepted')
+`, source.pathname], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+});

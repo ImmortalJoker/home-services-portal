@@ -16,7 +16,7 @@ const secret = () => randomBytes(32).toString('hex');
 const baseProvider = 'Portal Test Protected Service Provider';
 const expectedMappingFailure = 'optional provider transmission: missing required managed proxy mapping for upstream basic auth';
 
-export function buildFixture() {
+export function buildFixture({ http = false } = {}) {
   const pgPassword = secret();
   const authentikEnv = {
     AUTHENTIK_POSTGRESQL__HOST: 'postgresql',
@@ -70,11 +70,18 @@ export function buildFixture() {
     };
   }
   Object.assign(services.worker.environment, optionalEnv, { PORTAL_TEST_EXTERNAL_HOST: 'https://portal.rel04.test' });
+  if (http) {
+    services.server.networks = { default: { aliases: ['auth.rel04.test', 'transmission.rel04.test', 'metrics.rel04.test'] } };
+    services.worker.networks = { default: { aliases: ['upstream.rel04.test'] } };
+    services.worker.environment.PORTAL_TRANSMISSION_EXTERNAL_HOST = 'http://transmission.rel04.test:9000';
+    services.worker.environment.PORTAL_METRICS_EXTERNAL_HOST = 'http://metrics.rel04.test:9000';
+  }
   for (const service of Object.values(services)) {
     service.pull_policy = 'never';
     service.logging = { driver: 'none' };
   }
   return {
+    http,
     compose: { services, networks: { default: { internal: true } }, volumes: { database: {} } },
     blueprint: dummyUpstream(readFileSync(join(root, 'deploy/authentik/blueprints/portal-access-groups.yaml'), 'utf8')),
     disabled: Object.keys(optionalEnv),
@@ -182,10 +189,16 @@ verify_enabled()
 print('REL04_RESTORED')
 `;
 
+const httpFailures = [
+  'REL04_HTTP_SETUP', 'REL04_HTTP_READINESS', 'REL04_HTTP_ANONYMOUS',
+  'REL04_HTTP_TRANSMISSION', 'REL04_HTTP_METRICS', 'REL04_HTTP_AUTHORIZATION',
+  'REL04_HTTP_HOST', 'REL04_HTTP_ACCESS', 'REL04_HTTP_ARRIVALS',
+];
 const markers = new Set([
   'REL04_APPLIED', 'REL04_READY', 'REL04_DISABLED', 'REL04_CREATED', 'REL04_UPDATED',
   'REL04_SCOPE_PROXY_PRESENT', 'REL04_SCOPE_PROXY_ABSENT',
   'REL04_EXPECTED_REJECTION', 'REL04_RESTORED',
+  'REL04_HTTP_PASSED', ...httpFailures,
 ]);
 const composeVersion = /^v?(?:[2-9]|[1-9]\d+)\.\d+\.\d+(?:[-+][\w.+-]+)?$/;
 
@@ -346,6 +359,15 @@ export async function runAcceptance(run, report, fixture = buildFixture()) {
     throw commandFailure('scope-proxy removal and restoration ORM check', mutation, true);
   }
   report(`Expected verifier rejection observed (${expectedMappingFailure}). Restored mapping and ORM checks passed.`);
+  if (fixture.http) {
+    const source = readFileSync(join(root, 'scripts/authentik-rel04-http.py'), 'utf8');
+    const result = await shell(source + '\nmain()\n', [], 180_000);
+    const failure = httpFailures.find((marker) => hasMarker(result, marker));
+    if (!result.ok || failure || result.output !== 'REL04_HTTP_PASSED') {
+      throw commandFailure('HTTP proxy acceptance', result, false, failure);
+    }
+    report('REL04_HTTP_PASSED');
+  }
 }
 
 const pythonExceptionPattern = /^(?:(?:[a-zA-Z_]\w*\.)*)(AssertionError|DoesNotExist|MultipleObjectsReturned|ImportError|ModuleNotFoundError|OperationalError|ProgrammingError|IntegrityError|ValidationError|ValueError|TypeError|AttributeError|KeyError|NameError|FileNotFoundError|PermissionError|RuntimeError|SyntaxError)(?:: (.*))?$/;
@@ -391,7 +413,7 @@ export function executeDocker(args, env, input, execute = execFile, timeout = 60
   });
 }
 
-export async function runDisposable(transport, report, inherited = process.env, reportCleanupFailure = report) {
+export async function runDisposable(transport, report, inherited = process.env, reportCleanupFailure = report, options) {
   const pluginDirectory = inherited.REL04_COMPOSE_PLUGIN_DIR;
   if (pluginDirectory !== undefined) {
     try {
@@ -467,7 +489,7 @@ export async function runDisposable(transport, report, inherited = process.env, 
         throw new AcceptanceError('Compose plugin configuration failed [category=config-write]');
       }
     }
-    const fixture = buildFixture();
+    const fixture = buildFixture(options);
     writeFileSync(file, JSON.stringify(fixture.compose), { mode: 0o600 });
     writeFileSync(envFile, '', { mode: 0o600 });
     report(`Disposable project ${project}. Recovery directory ${directory}`);
@@ -499,7 +521,7 @@ export async function runDisposable(transport, report, inherited = process.env, 
       checkInterrupt();
       return result;
     }, report, fixture);
-    report('REL-04 disposable ORM checks passed. HTTP proxy-header checks remain pending.');
+    if (!fixture.http) report('REL-04 disposable ORM checks passed. HTTP proxy-header checks remain pending.');
   } finally {
     try {
       if (attempted) {
@@ -536,12 +558,13 @@ export async function runDisposable(transport, report, inherited = process.env, 
 }
 
 async function main() {
-  if (process.argv.slice(2).join(' ') !== '--confirm-disposable-rel04') {
-    throw new AcceptanceError('Explicit opt-in required. Use --confirm-disposable-rel04.');
+  const [confirmation, mode, ...extra] = process.argv.slice(2);
+  if (confirmation !== '--confirm-disposable-rel04' || (mode !== undefined && mode !== '--http') || extra.length) {
+    throw new AcceptanceError('Explicit opt-in required. Use --confirm-disposable-rel04 with optional --http.');
   }
   await runDisposable(
     (args, env, input, timeout) => executeDocker(args, env, input, execFile, timeout),
-    console.log, process.env, console.error,
+    console.log, process.env, console.error, { http: mode === '--http' },
   );
 }
 

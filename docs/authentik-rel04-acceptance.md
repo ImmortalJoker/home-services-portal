@@ -30,7 +30,19 @@ The harness waits for required system blueprints, applies the unwatched fixture 
 
 ## Evidence limits
 
-A pass establishes real model/ORM acceptance for these fixtures at the recorded code/image identities. It does **not** establish upstream Authorization/Host headers, live outpost HTTP handling, real-user permission checks, logout/revocation, mobile compatibility, or causality of asynchronous default-mapping attachment. No deployment or merge is performed. Keep actual runtime results separate from the synthetic suites and record exact commands, image identities and exits privately.
+An ORM-only pass establishes model acceptance for these fixtures at the recorded code and image identities. An HTTP pass adds evidence for the dummy Owner and anonymous requests described below. Parent review and a separately inspected run against the approved engine are required to close the HTTP gate. Record actual runtime results, code and image identities, commands and exit statuses privately. Production permissions, logout and revocation, mobile clients and the cause of asynchronous mapping attachment are outside the rehearsal.
+
+## Explicit operator-only HTTP rehearsal
+
+Use the same engine approval, cached images and private environment setup as the ORM rehearsal.
+
+```sh
+node scripts/authentik-rel04-acceptance.mjs --confirm-disposable-rel04 --http
+```
+
+After ORM restoration, the existing Authentik worker opens fixture listeners on its internal Compose network. Network aliases route the fixture auth and proxy URLs to the embedded outpost and the fixture upstream URLs to the worker. These URLs use plain HTTP on that network only. The client disables environment proxies and limits each redirect to the fixture auth origin and the provider being tested. The harness creates a fresh dummy Owner and follows the pinned Authentik password flow and outpost callback using separate in-memory cookie jars for each provider and anonymous check. [Flow executor](https://raw.githubusercontent.com/goauthentik/authentik/version/2026.8.5/authentik/flows/views/executor.py) · [Embedded outpost endpoint selection](https://raw.githubusercontent.com/goauthentik/authentik/version/2026.8.5/internal/outpost/proxyv2/application/endpoint.go) · [Outpost callback](https://raw.githubusercontent.com/goauthentik/authentik/version/2026.8.5/internal/outpost/proxyv2/application/oauth_callback.go)
+
+For each provider, the probe checks that an anonymous request to the protected path produces zero additional upstream arrivals, then requires exactly one authenticated arrival on that path. Transmission must receive the generated Basic Authorization and `Host: 127.0.0.1:9091`. Metrics must receive `Host: metrics.rel04.test:9000` with no Authorization header. The Metrics request already uses that authority, so this checks the delivered Host value and leaves mapping causality untested. `REL04_HTTP_PASSED` requires both listeners' assertions. Failures report fixed labels such as `REL04_HTTP_ANONYMOUS`, `REL04_HTTP_HOST` or `REL04_HTTP_AUTHORIZATION`. A readiness or provider phase failure leaves the HTTP gate open. Check the command exit and positively verified cleanup before recording a pass.
 
 ## Cleanup and failure recovery
 
